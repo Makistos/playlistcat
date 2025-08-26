@@ -18,8 +18,7 @@ build.bat
 ## 📋 What Gets Built
 
 The build process creates:
-- **`playlistcat`** (or `playlistcat.exe`) - GUI version
-- **`playlistcat-cli`** (or `playlistcat-cli.exe`) - CLI version
+- **`playlistcat`** (or `playlistcat.exe`) - GUI application
 - **Launcher scripts** - Easy-to-use shortcuts
 - **Documentation** - README, LICENSE, examples
 
@@ -30,9 +29,7 @@ After building, you'll find everything in the `release/` folder:
 ```
 release/
 ├── playlistcat(.exe)      # GUI executable
-├── playlistcat-cli(.exe)  # CLI executable
 ├── run-gui.sh/.bat        # GUI launcher
-├── run-cli.sh/.bat        # CLI launcher
 ├── README.md              # Documentation
 ├── LICENSE                # License file
 └── examples.py            # Example playlists
@@ -46,17 +43,11 @@ release/
 ./run-gui.sh
 # or directly:
 ./playlistcat
-
-# CLI version
-./run-cli.sh
-# or directly:
-./playlistcat-cli
 ```
 
 ### Windows:
-- Double-click `run-gui.bat` for GUI version
-- Double-click `run-cli.bat` for CLI version
-- Or run `playlistcat.exe` / `playlistcat-cli.exe` directly
+- Double-click `run-gui.bat` to launch PlaylistCat
+- Or run `playlistcat.exe` directly
 
 ## 🔧 Build Requirements
 
@@ -76,21 +67,20 @@ release/
 **Successfully tested!** ✨
 
 - ✅ **GUI Version**: 61MB standalone executable (tested)
-- ✅ **CLI Version**: 13MB standalone executable (tested)
+- ✅ **GUI Application**: ~61MB standalone executable (tested)
 - ✅ **Build Scripts**: Both Linux/macOS and Windows versions
 - ✅ **Release Package**: Complete with launchers and documentation
 - ✅ **Standalone**: Runs without Python or dependencies
 - ✅ **Cross-directory**: Works from any location
-- ✅ **Smart Launcher**: Auto-detects environment and launches appropriate version
+- ✅ **Easy Launch**: Simple launcher scripts included
 
 ## 📏 File Sizes
 
 Actual executable sizes (tested):
 - **GUI version**: ~61 MB (includes Qt libraries)
-- **CLI version**: ~13 MB (no GUI libraries)
 - **Compressed**: ~30-40% smaller when zipped
 
-Release package includes both executables, documentation, and launcher scripts.
+Release package includes executable, documentation, and launcher scripts.
 
 ## 🌍 Cross-Platform Building
 
@@ -114,7 +104,7 @@ Note: You need to build on each target platform (PyInstaller limitation).
 Edit the build scripts to customize:
 - `--onefile`: Creates single executable (vs. folder with dependencies)
 - `--windowed`: No console window for GUI (Windows)
-- `--console`: Show console window for CLI
+- `--console`: Show console window for debugging
 - `--name`: Set executable name
 - `--add-data`: Include additional files
 
@@ -138,13 +128,36 @@ Edit the build scripts to customize:
 ## 📦 Alternative Packaging Methods
 
 ### Docker (Linux containers)
+### Docker Image Example
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.9-slim
 COPY . /app
 WORKDIR /app
 RUN pip install -r requirements.txt
-CMD ["python", "src/cli.py"]
+CMD ["python", "src/main.py"]
 ```
+
+Consider using `python-appimage` for Linux AppImage packaging.
+
+### Windows Installer
+Use tools like **Inno Setup** or **NSIS** to create Windows installers.
+
+## 🎉 Distribution Tips
+
+1. **Test on clean machines** before distributing
+2. **Include README.md** with usage instructions
+3. **Provide GUI application** for broad compatibility
+4. **Use GitHub Releases** for easy distribution
+5. **Create checksums** for download verification
+
+## 📱 Future: Mobile Apps
+
+For mobile versions, consider:
+- **Kivy** - Cross-platform Python framework
+- **BeeWare** - Native mobile apps from Python
+- **Web app** - Browser-based version with Flask/FastAPI
+
+The core logic in `src/` can be reused across all platforms!
 
 ### AppImage (Linux)
 Consider using `python-appimage` for Linux AppImage packaging.

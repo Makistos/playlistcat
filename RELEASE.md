@@ -41,23 +41,17 @@ Each release includes the following artifacts:
 
 ### Windows (`playlistcat-windows-x64.zip`)
 - `playlistcat.exe` - GUI application
-- `playlistcat-cli.exe` - CLI application
 - `run-gui.bat` - GUI launcher script
-- `run-cli.bat` - CLI launcher script
 - Documentation and examples
 
 ### macOS (`playlistcat-macos-x64.tar.gz`)
 - `playlistcat` - GUI application
-- `playlistcat-cli` - CLI application
 - `run-gui.sh` - GUI launcher script
-- `run-cli.sh` - CLI launcher script
 - Documentation and examples
 
 ### Linux (`playlistcat-linux-x64.tar.gz`)
 - `playlistcat` - GUI application
-- `playlistcat-cli` - CLI application
 - `run-gui.sh` - GUI launcher script
-- `run-cli.sh` - CLI launcher script
 - Documentation and examples
 
 ## Version Numbering
@@ -134,7 +128,7 @@ Before major releases:
 Before releasing:
 
 - [ ] GUI application starts without errors
-- [ ] CLI application works with test commands
+- [ ] GUI application works with test playlists
 - [ ] Playlist fetching works with valid URL/ID
 - [ ] Table sorting functions correctly
 - [ ] All launcher scripts work

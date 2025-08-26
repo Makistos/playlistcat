@@ -32,7 +32,7 @@ Thank you for your interest in contributing to PlaylistCat! This document provid
 - Keep functions focused and small when possible
 
 ### Testing
-- Test both GUI and CLI versions before submitting
+- Test the GUI version before submitting
 - Ensure the application works with various playlist types
 - Test error handling with invalid inputs
 

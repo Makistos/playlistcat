@@ -34,7 +34,7 @@ assignees: ''
 - [ ] Windows executable tested
 - [ ] macOS executable tested
 - [ ] Linux executable tested
-- [ ] CLI version tested
+- [ ] GUI version tested
 - [ ] GUI version tested
 
 ## Release Notes Draft

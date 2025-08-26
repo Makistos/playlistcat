@@ -57,21 +57,18 @@ jobs:
             arch: x64
             build_script: ./build.sh
             gui_binary: playlistcat
-            cli_binary: playlistcat-cli
             artifact_name: playlistcat-linux-x64
           - os: windows-latest
             platform: windows
             arch: x64
             build_script: .\build.bat
             gui_binary: playlistcat.exe
-            cli_binary: playlistcat-cli.exe
             artifact_name: playlistcat-windows-x64
           - os: macos-latest
             platform: macos
             arch: x64
             build_script: ./build.sh
             gui_binary: playlistcat
-            cli_binary: playlistcat-cli
             artifact_name: playlistcat-macos-x64
 
     steps:
@@ -175,7 +172,7 @@ jobs:
         body: |
           # PlaylistCat ${{ needs.validate-version.outputs.version }} 🐱
 
-          Cross-platform YouTube Music playlist manager with GUI and CLI interfaces.
+          Cross-platform YouTube Music playlist manager with modern PyQt6 GUI interface.
 
           ## Downloads
           - **Windows**: `playlistcat-windows-x64.zip`

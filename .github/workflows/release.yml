@@ -27,21 +27,18 @@ jobs:
             arch: x64
             build_script: ./build.sh
             gui_binary: playlistcat
-            cli_binary: playlistcat-cli
             artifact_name: playlistcat-linux-x64
           - os: windows-latest
             platform: windows
             arch: x64
             build_script: .\build.bat
             gui_binary: playlistcat.exe
-            cli_binary: playlistcat-cli.exe
             artifact_name: playlistcat-windows-x64
           - os: macos-latest
             platform: macos
             arch: x64
             build_script: ./build.sh
             gui_binary: playlistcat
-            cli_binary: playlistcat-cli
             artifact_name: playlistcat-macos-x64
 
     steps:
@@ -118,28 +115,15 @@ jobs:
         echo "Checking release directory..."
         ls -la release/
         echo ""
-        echo "Expected files:"
-        echo "  GUI binary: ${{ matrix.gui_binary }}"
-        echo "  CLI binary: ${{ matrix.cli_binary }}"
+        echo "Expected file: ${{ matrix.gui_binary }}"
         echo ""
-        
+
         # Check for GUI binary
         if [ -f "release/${{ matrix.gui_binary }}" ]; then
           echo "✅ GUI binary found: ${{ matrix.gui_binary }}"
           ls -lh "release/${{ matrix.gui_binary }}"
         else
           echo "❌ GUI binary not found: ${{ matrix.gui_binary }}"
-          echo "Available files in release directory:"
-          find release/ -type f -name "*" | sort
-          exit 1
-        fi
-        
-        # Check for CLI binary
-        if [ -f "release/${{ matrix.cli_binary }}" ]; then
-          echo "✅ CLI binary found: ${{ matrix.cli_binary }}"
-          ls -lh "release/${{ matrix.cli_binary }}"
-        else
-          echo "❌ CLI binary not found: ${{ matrix.cli_binary }}"
           echo "Available files in release directory:"
           find release/ -type f -name "*" | sort
           exit 1
@@ -209,29 +193,28 @@ jobs:
         ## What's New
         - Cross-platform YouTube Music playlist manager
         - Sortable playlist tables with track information
-        - GUI and CLI versions available
-        - Standalone executables (no Python installation required)
+        - GUI application with PyQt6 interface
+        - Standalone executable (no Python installation required)
 
         ## Downloads
         Choose the version for your operating system:
 
         ### Windows
         - Download `playlistcat-windows-x64.zip`
-        - Extract and run `run-gui.bat` (GUI) or `run-cli.bat` (CLI)
+        - Extract and run `run-gui.bat`
 
         ### macOS
         - Download `playlistcat-macos-x64.tar.gz`
-        - Extract and run `./run-gui.sh` (GUI) or `./run-cli.sh` (CLI)
+        - Extract and run `./run-gui.sh`
 
         ### Linux
         - Download `playlistcat-linux-x64.tar.gz`
-        - Extract and run `./run-gui.sh` (GUI) or `./run-cli.sh` (CLI)
+        - Extract and run `./run-gui.sh`
 
         ## Features
         - 🎵 Fetch YouTube Music playlists
         - 📊 Sortable table view (position, artist, track, duration)
-        - 🖥️ GUI version with PyQt6 interface
-        - ⌨️ CLI version for headless environments
+        - 🖥️ Modern GUI with PyQt6 interface
         - 🔗 Playlist URL/ID validation
         - 📱 Cross-platform compatibility
 
@@ -268,17 +251,14 @@ jobs:
             artifact: playlistcat-linux-x64
             extract_cmd: tar -xzf
             test_gui: ./playlistcat --version
-            test_cli: echo "quit" | ./playlistcat-cli
           - os: windows-latest
             artifact: playlistcat-windows-x64
             extract_cmd: 7z x
             test_gui: .\playlistcat.exe --version
-            test_cli: echo quit | .\playlistcat-cli.exe
           - os: macos-latest
             artifact: playlistcat-macos-x64
             extract_cmd: tar -xzf
             test_gui: ./playlistcat --version
-            test_cli: echo "quit" | ./playlistcat-cli
 
     steps:
     - name: Download artifact
@@ -304,7 +284,7 @@ jobs:
           chmod +x playlistcat* run-*.sh
         fi
 
-        echo "Testing CLI version..."
-        timeout 10s ${{ matrix.test_cli }} || echo "CLI test completed (timeout expected)"
+        echo "Testing GUI version..."
+        timeout 10s ${{ matrix.test_gui }} || echo "GUI test completed (timeout expected)"
 
         echo "✅ Artifact test completed successfully"

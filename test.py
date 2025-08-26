@@ -89,7 +89,6 @@ def main():
 
     print("\nTo run the application:")
     print("  GUI: ./run.sh")
-    print("  CLI: ./run.sh --cli")
 
 if __name__ == "__main__":
     main()

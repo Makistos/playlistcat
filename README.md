@@ -2,7 +2,7 @@
 
 *Catalog and explore your YouTube Music playlists*
 
-A desktop application that fetches YouTube Music playlists and displays them in a sortable table format. Available in both GUI (PyQt6) and CLI versions.
+A desktop application that fetches YouTube Music playlists and displays them in a sortable table format using a modern PyQt6 GUI interface.
 
 ## Features
 
@@ -10,9 +10,7 @@ A desktop application that fetches YouTube Music playlists and displays them in 
 - **Sortable Display**: Sort by Position, Artist, or Track Name
 - **Direct Links**: Open any track directly in YouTube Music
 - **Refresh Function**: Update the current playlist with fresh data
-- **Two Interfaces**:
-  - **GUI**: Clean Qt-based interface with mouse interaction
-  - **CLI**: Command-line interface for headless environments
+- **Modern GUI**: Clean Qt-based interface with mouse interaction
 - **Standalone Packaging**: Create executables that run without Python installation
 
 ## Quick Start (Standalone)
@@ -61,24 +59,16 @@ A desktop application that fetches YouTube Music playlists and displays them in 
 
 ### Easy Launch (Recommended)
 ```bash
-./run.sh           # Auto-detects and launches appropriate version
-./run.sh --cli     # Force CLI version
+./run.sh           # Launch the application
 ```
 
 ### Manual Launch
 
-#### GUI Version
+#### GUI Application
 ```bash
 # Make sure virtual environment is activated
 source venv/bin/activate
 python src/main.py
-```
-
-#### CLI Version
-```bash
-# Make sure virtual environment is activated
-source venv/bin/activate
-python src/cli.py
 ```
 
 ### Getting a Playlist ID
@@ -87,7 +77,7 @@ python src/cli.py
 3. Copy the playlist ID from the URL (the part after `list=`)
 4. Example: `PLrAGlzNOGcAqFNKK0c4K8Z9U8QmFNKK0c`
 
-### Using the GUI Version
+### Using the Application
 - Enter the playlist ID in the input field
 - Click "Fetch Playlist" or press Enter
 - Wait for the tracks to load
@@ -95,34 +85,12 @@ python src/cli.py
 - Double-click any track to open in YouTube Music
 - Use "Refresh" to update the current playlist
 
-### Using the CLI Version
-```
-Commands:
-  fetch <playlist_id>  - Fetch a playlist
-  show [sort_by]       - Show tracks (sort_by: position, artist, title)
-  open <position>      - Open track at position in browser
-  refresh              - Refresh current playlist
-  quit                 - Exit
-```
-
-Example CLI session:
-```
-> fetch PLrAGlzNOGcAqFNKK0c4K8Z9U8QmFNKK0c
-> show artist
-> open 5
-> quit
-```
-
 ## Table Columns / Display Format
 
-### GUI Version
 - **Position**: Original position in the playlist
 - **Artist**: Track artist(s)
 - **Track Name**: Name of the track
 - **YouTube Music Link**: Click to open in browser
-
-### CLI Version
-Displays the same information in a formatted table with columns for position, artist, track name, and URL availability.
 
 ## Project Structure
 
@@ -131,12 +99,11 @@ playlistcat/
 ├── src/
 │   ├── __init__.py       # Package initialization
 │   ├── main.py           # GUI application (PyQt6)
-│   ├── cli.py            # CLI application
 │   └── utils.py          # Utility functions
 ├── venv/                 # Virtual environment
 ├── dist/                 # Built executables (after packaging)
 ├── requirements.txt      # Python dependencies
-├── run.sh               # Launch script (auto-detects GUI/CLI)
+├── run.sh               # Launch script
 ├── build.sh/.bat        # Build standalone executables
 ├── test.py              # System test script
 ├── examples.py          # Example playlist IDs
@@ -162,18 +129,16 @@ playlistcat/
 
 **GUI won't start**:
 - Install missing system packages: `sudo apt install python3-pyqt6` (Ubuntu/Debian)
-- Or use the CLI version: `./run.sh --cli`
-- The launch script automatically falls back to CLI if GUI fails
+- Check that your system supports GUI applications
 
 **Qt platform plugin errors**:
 - Install xcb libraries: `sudo apt install libxcb-cursor0` (Ubuntu/Debian)
-- Or set `export QT_QPA_PLATFORM=offscreen` for headless mode
-- The application will automatically use CLI mode if no display is available
+- For headless environments, consider using the application in a virtual display
 
 ## Requirements
 
 - Python 3.8+
-- PyQt6 (for GUI version)
+- PyQt6 (for GUI)
 - ytmusicapi
 - requests
 - Internet connection
@@ -195,8 +160,7 @@ playlistcat/
 
 3. **Run the application**:
    ```bash
-   ./run.sh          # Auto-detects best version
-   ./run.sh --cli    # Force CLI version
+   ./run.sh          # Launch PlaylistCat
    ```
 
 4. **Try example playlists**:
@@ -206,10 +170,10 @@ playlistcat/
 
 ## ✅ Status: **Production Ready!** 🚀
 
-- ✅ **GUI & CLI**: Both versions fully functional
+- ✅ **Modern GUI**: PyQt6 interface fully functional
 - ✅ **Standalone Packaging**: No Python required for end users
 - ✅ **Cross-Platform**: Works on Linux, macOS, and Windows
-- ✅ **Smart Launcher**: Auto-detects environment
+- ✅ **Smart Launcher**: Easy to use
 - ✅ **Comprehensive Testing**: All systems verified
 - ✅ **Complete Documentation**: Setup, usage, and packaging guides
    ```bash
@@ -225,7 +189,7 @@ Create executables that run on any machine without Python:
 ./build.sh          # Linux/macOS
 build.bat           # Windows
 
-# Result: playlistcat(.exe) and playlistcat-cli(.exe)
+# Result: playlistcat(.exe)
 # No Python installation required on target machines!
 ```
 
