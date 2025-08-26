@@ -168,3 +168,16 @@ cython_debug/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Build outputs and release packages
+release/
+*.exe
+*.dmg
+*.app
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+# PyInstaller spec files (auto-generated)
+*.spec
