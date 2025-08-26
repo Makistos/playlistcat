@@ -10,11 +10,32 @@ A desktop application that fetches YouTube Music playlists and displays them in 
 - **Sortable Display**: Sort by Position, Artist, or Track Name
 - **Direct Links**: Open any track directly in YouTube Music
 - **Refresh Function**: Update the current playlist with fresh data
-- **Two Interfaces**: 
+- **Two Interfaces**:
   - **GUI**: Clean Qt-based interface with mouse interaction
   - **CLI**: Command-line interface for headless environments
+- **Standalone Packaging**: Create executables that run without Python installation
 
-## Installation
+## Quick Start (Standalone)
+
+**Download the latest release for your platform:**
+
+[![Latest Release](https://img.shields.io/github/v/release/Makistos/playlistcat?style=for-the-badge)](https://github.com/Makistos/playlistcat/releases/latest)
+
+### Windows
+1. Download `playlistcat-windows-x64.zip`
+2. Extract and run `run-gui.bat`
+
+### macOS
+1. Download `playlistcat-macos-x64.tar.gz`
+2. Extract and run `./run-gui.sh`
+
+### Linux
+1. Download `playlistcat-linux-x64.tar.gz`
+2. Extract and run `./run-gui.sh`
+
+**No Python installation required!**
+
+## Developer Installation
 
 1. **Install Python 3.8+** if not already installed
 
@@ -78,7 +99,7 @@ python src/cli.py
 ```
 Commands:
   fetch <playlist_id>  - Fetch a playlist
-  show [sort_by]       - Show tracks (sort_by: position, artist, title)  
+  show [sort_by]       - Show tracks (sort_by: position, artist, title)
   open <position>      - Open track at position in browser
   refresh              - Refresh current playlist
   quit                 - Exit
@@ -96,7 +117,7 @@ Example CLI session:
 
 ### GUI Version
 - **Position**: Original position in the playlist
-- **Artist**: Track artist(s) 
+- **Artist**: Track artist(s)
 - **Track Name**: Name of the track
 - **YouTube Music Link**: Click to open in browser
 
@@ -106,21 +127,22 @@ Displays the same information in a formatted table with columns for position, ar
 ## Project Structure
 
 ```
-ytmcat/
+playlistcat/
 ├── src/
 │   ├── __init__.py       # Package initialization
 │   ├── main.py           # GUI application (PyQt6)
-│   ├── cli.py            # CLI application  
+│   ├── cli.py            # CLI application
 │   └── utils.py          # Utility functions
 ├── venv/                 # Virtual environment
+├── dist/                 # Built executables (after packaging)
 ├── requirements.txt      # Python dependencies
 ├── run.sh               # Launch script (auto-detects GUI/CLI)
+├── build.sh/.bat        # Build standalone executables
 ├── test.py              # System test script
 ├── examples.py          # Example playlist IDs
+├── PACKAGING.md         # Packaging guide
 └── README.md            # This file
-```
-
-## Notes
+```## Notes
 
 - The application fetches public playlists only
 - Private playlists will show an error
@@ -129,16 +151,16 @@ ytmcat/
 
 ## Troubleshooting
 
-**"Playlist not found or is private"**: 
+**"Playlist not found or is private"**:
 - Verify the playlist ID is correct
 - Make sure the playlist is public
 - Try copying the ID again from the YouTube Music URL
 
-**Import errors**: 
+**Import errors**:
 - Make sure all dependencies are installed: `pip install -r requirements.txt`
 - Check that you're using Python 3.8 or higher
 
-**GUI won't start**: 
+**GUI won't start**:
 - Install missing system packages: `sudo apt install python3-pyqt6` (Ubuntu/Debian)
 - Or use the CLI version: `./run.sh --cli`
 - The launch script automatically falls back to CLI if GUI fails
@@ -181,3 +203,30 @@ ytmcat/
    ```bash
    python examples.py
    ```
+
+## ✅ Status: **Production Ready!** 🚀
+
+- ✅ **GUI & CLI**: Both versions fully functional
+- ✅ **Standalone Packaging**: No Python required for end users
+- ✅ **Cross-Platform**: Works on Linux, macOS, and Windows
+- ✅ **Smart Launcher**: Auto-detects environment
+- ✅ **Comprehensive Testing**: All systems verified
+- ✅ **Complete Documentation**: Setup, usage, and packaging guides
+   ```bash
+   python examples.py
+   ```
+
+## 📦 Standalone Packaging
+
+Create executables that run on any machine without Python:
+
+```bash
+# Build standalone executables
+./build.sh          # Linux/macOS
+build.bat           # Windows
+
+# Result: playlistcat(.exe) and playlistcat-cli(.exe)
+# No Python installation required on target machines!
+```
+
+See [PACKAGING.md](PACKAGING.md) for detailed instructions.

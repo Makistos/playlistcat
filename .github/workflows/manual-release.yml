@@ -1,0 +1,170 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'Create as draft'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  APP_NAME: playlistcat
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  validate-version:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+    steps:
+    - name: Validate version format
+      id: validate
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+        if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "❌ Invalid version format. Use format: v1.0.0"
+          exit 1
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "✅ Version format valid: $VERSION"
+
+  build:
+    name: Build ${{ matrix.os }}
+    needs: validate-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            build_script: ./build.sh
+            gui_binary: playlistcat
+            cli_binary: playlistcat-cli
+            artifact_name: playlistcat-linux-x64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            build_script: .\build.bat
+            gui_binary: playlistcat.exe
+            cli_binary: playlistcat-cli.exe
+            artifact_name: playlistcat-windows-x64
+          - os: macos-latest
+            platform: macos
+            arch: x64
+            build_script: ./build.sh
+            gui_binary: playlistcat
+            cli_binary: playlistcat-cli
+            artifact_name: playlistcat-macos-x64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install system dependencies (Ubuntu)
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libgl1-mesa-glx \
+          libglib2.0-0 \
+          libxcb-xinerama0 \
+          libxcb-cursor0 \
+          libxkbcommon-x11-0
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Make build script executable (Unix)
+      if: matrix.platform != 'windows'
+      run: chmod +x ${{ matrix.build_script }}
+
+    - name: Build application
+      shell: bash
+      run: |
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          cmd.exe /c "${{ matrix.build_script }}"
+        else
+          ${{ matrix.build_script }}
+        fi
+
+    - name: Create platform archive
+      shell: bash
+      run: |
+        cd release
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          7z a "../${{ matrix.artifact_name }}.zip" .
+        else
+          tar -czf "../${{ matrix.artifact_name }}.tar.gz" .
+        fi
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: |
+          ${{ matrix.artifact_name }}.zip
+          ${{ matrix.artifact_name }}.tar.gz
+
+  create-release:
+    name: Create GitHub Release
+    needs: [validate-version, build]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: ./artifacts
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.validate-version.outputs.version }}
+        name: PlaylistCat ${{ needs.validate-version.outputs.version }}
+        draft: ${{ github.event.inputs.draft }}
+        prerelease: ${{ github.event.inputs.prerelease }}
+        body: |
+          # PlaylistCat ${{ needs.validate-version.outputs.version }} 🐱
+
+          Cross-platform YouTube Music playlist manager with GUI and CLI interfaces.
+
+          ## Downloads
+          - **Windows**: `playlistcat-windows-x64.zip`
+          - **macOS**: `playlistcat-macos-x64.tar.gz`
+          - **Linux**: `playlistcat-linux-x64.tar.gz`
+
+          ## Installation
+          1. Download the appropriate file for your OS
+          2. Extract the archive
+          3. Run the launcher script or executable directly
+
+          No Python installation required!
+        files: |
+          artifacts/playlistcat-linux-x64/playlistcat-linux-x64.tar.gz
+          artifacts/playlistcat-windows-x64/playlistcat-windows-x64.zip
+          artifacts/playlistcat-macos-x64/playlistcat-macos-x64.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

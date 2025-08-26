@@ -11,13 +11,13 @@ source "$SCRIPT_DIR/venv/bin/activate"
 if [ "$1" = "--cli" ] || [ "$1" = "-c" ]; then
     echo "Starting CLI version..."
     python "$SCRIPT_DIR/src/cli.py"
-elif [ "$DISPLAY" = "" ]; then
+elif [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
     echo "No display detected, starting CLI version..."
     python "$SCRIPT_DIR/src/cli.py"
 else
     echo "Starting GUI version..."
-    python "$SCRIPT_DIR/src/main.py" 2>/dev/null || {
-        echo "GUI failed to start, falling back to CLI version..."
+    timeout 5 python "$SCRIPT_DIR/src/main.py" 2>/dev/null || {
+        echo "GUI failed to start or timed out, falling back to CLI version..."
         python "$SCRIPT_DIR/src/cli.py"
     }
 fi

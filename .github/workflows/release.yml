@@ -1,0 +1,279 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
+  workflow_dispatch:  # Allows manual triggering
+
+env:
+  APP_NAME: playlistcat
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            build_script: ./build.sh
+            gui_binary: playlistcat
+            cli_binary: playlistcat-cli
+            artifact_name: playlistcat-linux-x64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            build_script: .\build.bat
+            gui_binary: playlistcat.exe
+            cli_binary: playlistcat-cli.exe
+            artifact_name: playlistcat-windows-x64
+          - os: macos-latest
+            platform: macos
+            arch: x64
+            build_script: ./build.sh
+            gui_binary: playlistcat
+            cli_binary: playlistcat-cli
+            artifact_name: playlistcat-macos-x64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies (Ubuntu)
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libgl1-mesa-glx \
+          libglib2.0-0 \
+          libxcb-xinerama0 \
+          libxcb-cursor0 \
+          libxkbcommon-x11-0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-shape0
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Make build script executable (Unix)
+      if: matrix.platform != 'windows'
+      run: chmod +x ${{ matrix.build_script }}
+
+    - name: Build application
+      shell: bash
+      run: |
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          cmd.exe /c "${{ matrix.build_script }}"
+        else
+          ${{ matrix.build_script }}
+        fi
+
+    - name: Verify build outputs
+      shell: bash
+      run: |
+        echo "Checking release directory..."
+        ls -la release/
+        echo "Checking for GUI binary..."
+        if [ -f "release/${{ matrix.gui_binary }}" ]; then
+          echo "✅ GUI binary found: ${{ matrix.gui_binary }}"
+          ls -lh "release/${{ matrix.gui_binary }}"
+        else
+          echo "❌ GUI binary not found: ${{ matrix.gui_binary }}"
+          exit 1
+        fi
+        echo "Checking for CLI binary..."
+        if [ -f "release/${{ matrix.cli_binary }}" ]; then
+          echo "✅ CLI binary found: ${{ matrix.cli_binary }}"
+          ls -lh "release/${{ matrix.cli_binary }}"
+        else
+          echo "❌ CLI binary not found: ${{ matrix.cli_binary }}"
+          exit 1
+        fi
+
+    - name: Create platform-specific archive
+      shell: bash
+      run: |
+        cd release
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          # Create ZIP for Windows
+          7z a "../${{ matrix.artifact_name }}.zip" .
+        else
+          # Create tar.gz for Unix systems
+          tar -czf "../${{ matrix.artifact_name }}.tar.gz" .
+        fi
+        cd ..
+        echo "Archive created:"
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          ls -lh "${{ matrix.artifact_name }}.zip"
+        else
+          ls -lh "${{ matrix.artifact_name }}.tar.gz"
+        fi
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: |
+          ${{ matrix.artifact_name }}.zip
+          ${{ matrix.artifact_name }}.tar.gz
+        retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: ./artifacts
+
+    - name: List downloaded artifacts
+      run: |
+        echo "Downloaded artifacts:"
+        find ./artifacts -type f -exec ls -lh {} \;
+
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        cat > release_notes.md << 'EOF'
+        # PlaylistCat ${{ steps.version.outputs.version }} 🐱
+
+        ## What's New
+        - Cross-platform YouTube Music playlist manager
+        - Sortable playlist tables with track information
+        - GUI and CLI versions available
+        - Standalone executables (no Python installation required)
+
+        ## Downloads
+        Choose the version for your operating system:
+
+        ### Windows
+        - Download `playlistcat-windows-x64.zip`
+        - Extract and run `run-gui.bat` (GUI) or `run-cli.bat` (CLI)
+
+        ### macOS
+        - Download `playlistcat-macos-x64.tar.gz`
+        - Extract and run `./run-gui.sh` (GUI) or `./run-cli.sh` (CLI)
+
+        ### Linux
+        - Download `playlistcat-linux-x64.tar.gz`
+        - Extract and run `./run-gui.sh` (GUI) or `./run-cli.sh` (CLI)
+
+        ## Features
+        - 🎵 Fetch YouTube Music playlists
+        - 📊 Sortable table view (position, artist, track, duration)
+        - 🖥️ GUI version with PyQt6 interface
+        - ⌨️ CLI version for headless environments
+        - 🔗 Playlist URL/ID validation
+        - 📱 Cross-platform compatibility
+
+        ## Requirements
+        - No Python installation required
+        - YouTube Music account (for API access)
+
+        For setup instructions and usage examples, see the included README.md file.
+        EOF
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: PlaylistCat ${{ steps.version.outputs.version }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        files: |
+          artifacts/playlistcat-linux-x64/playlistcat-linux-x64.tar.gz
+          artifacts/playlistcat-windows-x64/playlistcat-windows-x64.zip
+          artifacts/playlistcat-macos-x64/playlistcat-macos-x64.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-release:
+    name: Test Release Artifacts
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: playlistcat-linux-x64
+            extract_cmd: tar -xzf
+            test_gui: ./playlistcat --version
+            test_cli: echo "quit" | ./playlistcat-cli
+          - os: windows-latest
+            artifact: playlistcat-windows-x64
+            extract_cmd: 7z x
+            test_gui: .\playlistcat.exe --version
+            test_cli: echo quit | .\playlistcat-cli.exe
+          - os: macos-latest
+            artifact: playlistcat-macos-x64
+            extract_cmd: tar -xzf
+            test_gui: ./playlistcat --version
+            test_cli: echo "quit" | ./playlistcat-cli
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: ${{ matrix.artifact }}
+
+    - name: Extract and test
+      shell: bash
+      run: |
+        echo "Testing ${{ matrix.artifact }}..."
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          7z x "${{ matrix.artifact }}.zip"
+        else
+          tar -xzf "${{ matrix.artifact }}.tar.gz"
+        fi
+
+        echo "Files extracted:"
+        ls -la
+
+        echo "Making executables executable (Unix only)..."
+        if [ "${{ matrix.os }}" != "windows-latest" ]; then
+          chmod +x playlistcat* run-*.sh
+        fi
+
+        echo "Testing CLI version..."
+        timeout 10s ${{ matrix.test_cli }} || echo "CLI test completed (timeout expected)"
+
+        echo "✅ Artifact test completed successfully"

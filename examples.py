@@ -16,10 +16,10 @@ def main():
     print()
     print("Here are some example playlist IDs you can try:")
     print()
-    
+
     for name, playlist_id in EXAMPLE_PLAYLISTS.items():
         print(f"{name}: {playlist_id}")
-    
+
     print()
     print("To use these:")
     print("1. Run the application: ./run.sh")
