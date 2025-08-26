@@ -10,10 +10,32 @@ A desktop application that fetches YouTube Music playlists and displays them in 
 - **Sortable Display**: Sort by Position, Artist, or Track Name
 - **Direct Links**: Open any track directly in YouTube Music
 - **Refresh Function**: Update the current playlist with fresh data
-- **Two Interfaces**: 
+- **Two Interfaces**:
   - **GUI**: Clean Qt-based interface with mouse interaction
   - **CLI**: Command-line interface for headless environments
-- **Standalone Packaging**: Create executables that run without Python installation## Installation
+- **Standalone Packaging**: Create executables that run without Python installation
+
+## Quick Start (Standalone)
+
+**Download the latest release for your platform:**
+
+[![Latest Release](https://img.shields.io/github/v/release/Makistos/playlistcat?style=for-the-badge)](https://github.com/Makistos/playlistcat/releases/latest)
+
+### Windows
+1. Download `playlistcat-windows-x64.zip`
+2. Extract and run `run-gui.bat`
+
+### macOS
+1. Download `playlistcat-macos-x64.tar.gz`
+2. Extract and run `./run-gui.sh`
+
+### Linux
+1. Download `playlistcat-linux-x64.tar.gz`
+2. Extract and run `./run-gui.sh`
+
+**No Python installation required!**
+
+## Developer Installation
 
 1. **Install Python 3.8+** if not already installed
 
@@ -109,7 +131,7 @@ playlistcat/
 ├── src/
 │   ├── __init__.py       # Package initialization
 │   ├── main.py           # GUI application (PyQt6)
-│   ├── cli.py            # CLI application  
+│   ├── cli.py            # CLI application
 │   └── utils.py          # Utility functions
 ├── venv/                 # Virtual environment
 ├── dist/                 # Built executables (after packaging)
@@ -187,7 +209,7 @@ playlistcat/
 - ✅ **GUI & CLI**: Both versions fully functional
 - ✅ **Standalone Packaging**: No Python required for end users
 - ✅ **Cross-Platform**: Works on Linux, macOS, and Windows
-- ✅ **Smart Launcher**: Auto-detects environment  
+- ✅ **Smart Launcher**: Auto-detects environment
 - ✅ **Comprehensive Testing**: All systems verified
 - ✅ **Complete Documentation**: Setup, usage, and packaging guides
    ```bash

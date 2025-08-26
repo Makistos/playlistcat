@@ -83,11 +83,27 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          xvfb \
           libgl1-mesa-glx \
           libglib2.0-0 \
           libxcb-xinerama0 \
           libxcb-cursor0 \
-          libxkbcommon-x11-0
+          libxkbcommon-x11-0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-shape0 \
+          libxcb-xfixes0 \
+          libfontconfig1 \
+          libfreetype6 \
+          libx11-6 \
+          libx11-xcb1 \
+          libxext6 \
+          libxrender1 \
+          libegl1 \
+          libxkbcommon0
 
     - name: Install Python dependencies
       run: |
@@ -104,6 +120,12 @@ jobs:
       run: |
         if [ "${{ matrix.platform }}" = "windows" ]; then
           cmd.exe /c "${{ matrix.build_script }}"
+        elif [ "${{ matrix.platform }}" = "linux" ]; then
+          # Use virtual display for GUI builds on Linux
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          sleep 3
+          ${{ matrix.build_script }}
         else
           ${{ matrix.build_script }}
         fi

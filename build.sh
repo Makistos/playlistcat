@@ -4,6 +4,10 @@
 echo "🐱 PlaylistCat - Build Script"
 echo "============================="
 
+# Set environment variables for headless builds
+export QT_QPA_PLATFORM=offscreen
+export QT_LOGGING_RULES="*.debug=false;qt.qpa.*=false"
+
 # Check if virtual environment is activated
 if [[ "$VIRTUAL_ENV" == "" ]]; then
     echo "⚠️  Virtual environment not activated. Activating..."
@@ -12,7 +16,10 @@ fi
 
 # Install build dependencies
 echo "📦 Installing build dependencies..."
-pip install pyinstaller
+pip install pyinstaller || {
+    echo "❌ Failed to install pyinstaller"
+    exit 1
+}
 
 # Create assets directory and placeholder icon
 mkdir -p assets
@@ -38,7 +45,10 @@ pyinstaller --onefile --windowed --name playlistcat \
     --hidden-import PyQt6.QtWidgets \
     --hidden-import ytmusicapi \
     --hidden-import requests \
-    src/main.py
+    src/main.py || {
+    echo "❌ GUI build failed"
+    exit 1
+}
 
 echo "⌨️  Building CLI version..."
 pyinstaller --onefile --console --name playlistcat-cli \
@@ -47,7 +57,10 @@ pyinstaller --onefile --console --name playlistcat-cli \
     --hidden-import ytmusicapi \
     --hidden-import requests \
     --exclude-module PyQt6 \
-    src/cli.py
+    src/cli.py || {
+    echo "❌ CLI build failed"
+    exit 1
+}
 
 # Create distribution package
 echo "📁 Creating distribution package..."

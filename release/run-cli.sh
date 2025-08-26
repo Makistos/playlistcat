@@ -1,3 +1,3 @@
 #!/bin/bash
-# PlaylistCat CLI Launcher  
+# PlaylistCat CLI Launcher
 ./playlistcat-cli
