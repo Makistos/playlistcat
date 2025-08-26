@@ -18,6 +18,11 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
 env:
   APP_NAME: playlistcat
   PYTHON_VERSION: '3.11'
