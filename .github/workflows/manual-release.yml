@@ -104,20 +104,30 @@ jobs:
       if: matrix.platform != 'windows'
       run: chmod +x ${{ matrix.build_script }}
 
-    - name: Build application
+    - name: Build application (Windows)
+      if: matrix.platform == 'windows'
+      shell: cmd
+      env:
+        CI: true
+      run: |
+        echo "Starting Windows build..."
+        call ${{ matrix.build_script }}
+
+    - name: Build application (Linux)
+      if: matrix.platform == 'linux'
       shell: bash
       run: |
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          cmd.exe /c "${{ matrix.build_script }}"
-        elif [ "${{ matrix.platform }}" = "linux" ]; then
-          # Use virtual display for GUI builds on Linux
-          export DISPLAY=:99
-          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-          sleep 3
-          ${{ matrix.build_script }}
-        else
-          ${{ matrix.build_script }}
-        fi
+        # Use virtual display for GUI builds on Linux
+        export DISPLAY=:99
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        sleep 3
+        ${{ matrix.build_script }}
+
+    - name: Build application (macOS)
+      if: matrix.platform == 'macos'
+      shell: bash
+      run: |
+        ${{ matrix.build_script }}
 
     - name: Create platform archive
       shell: bash

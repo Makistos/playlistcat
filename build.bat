@@ -116,4 +116,9 @@ echo    - Double-click run-cli.bat for CLI version
 echo.
 echo 💡 No Python installation required on target machines!
 
-pause
+REM Don't pause in CI environment
+if defined CI (
+    echo Build completed in CI environment
+) else (
+    pause
+)
