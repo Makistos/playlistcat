@@ -44,6 +44,11 @@ pyinstaller --onefile --windowed --name playlistcat ^
     --hidden-import requests ^
     src\main.py
 
+if %ERRORLEVEL% neq 0 (
+    echo ❌ GUI build failed
+    exit /b 1
+)
+
 echo ⌨️ Building CLI version...
 pyinstaller --onefile --console --name playlistcat-cli ^
     --add-data "README.md;." ^
@@ -53,10 +58,39 @@ pyinstaller --onefile --console --name playlistcat-cli ^
     --exclude-module PyQt6 ^
     src\cli.py
 
+if %ERRORLEVEL% neq 0 (
+    echo ❌ CLI build failed
+    exit /b 1
+)
+
 REM Create release directory
 echo 📁 Creating release package...
 if not exist "release" mkdir release
-copy dist\*.exe release\ >nul 2>&1
+
+echo 🔍 Checking what was built in dist directory...
+dir dist
+
+echo 📋 Copying executables...
+if exist "dist\playlistcat.exe" (
+    copy "dist\playlistcat.exe" "release\" >nul 2>&1
+    echo ✅ Copied playlistcat.exe
+) else if exist "dist\playlistcat" (
+    copy "dist\playlistcat" "release\playlistcat.exe" >nul 2>&1
+    echo ✅ Copied playlistcat as playlistcat.exe
+) else (
+    echo ❌ No GUI executable found in dist directory
+)
+
+if exist "dist\playlistcat-cli.exe" (
+    copy "dist\playlistcat-cli.exe" "release\" >nul 2>&1
+    echo ✅ Copied playlistcat-cli.exe
+) else if exist "dist\playlistcat-cli" (
+    copy "dist\playlistcat-cli" "release\playlistcat-cli.exe" >nul 2>&1
+    echo ✅ Copied playlistcat-cli as playlistcat-cli.exe
+) else (
+    echo ❌ No CLI executable found in dist directory
+)
+
 copy README.md release\ >nul 2>&1
 copy LICENSE release\ >nul 2>&1
 copy examples.py release\ >nul 2>&1

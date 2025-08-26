@@ -102,20 +102,31 @@ jobs:
       run: |
         echo "Checking release directory..."
         ls -la release/
-        echo "Checking for GUI binary..."
+        echo ""
+        echo "Expected files:"
+        echo "  GUI binary: ${{ matrix.gui_binary }}"
+        echo "  CLI binary: ${{ matrix.cli_binary }}"
+        echo ""
+        
+        # Check for GUI binary
         if [ -f "release/${{ matrix.gui_binary }}" ]; then
           echo "✅ GUI binary found: ${{ matrix.gui_binary }}"
           ls -lh "release/${{ matrix.gui_binary }}"
         else
           echo "❌ GUI binary not found: ${{ matrix.gui_binary }}"
+          echo "Available files in release directory:"
+          find release/ -type f -name "*" | sort
           exit 1
         fi
-        echo "Checking for CLI binary..."
+        
+        # Check for CLI binary
         if [ -f "release/${{ matrix.cli_binary }}" ]; then
           echo "✅ CLI binary found: ${{ matrix.cli_binary }}"
           ls -lh "release/${{ matrix.cli_binary }}"
         else
           echo "❌ CLI binary not found: ${{ matrix.cli_binary }}"
+          echo "Available files in release directory:"
+          find release/ -type f -name "*" | sort
           exit 1
         fi
 
