@@ -222,7 +222,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSortingEnabled(True)
+        self.table.setSortingEnabled(False)  # Disable built-in sorting, use custom logic
 
         # Connect double-click to open URL
         self.table.itemDoubleClicked.connect(self.open_track_url)
@@ -355,7 +355,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         reverse = self.current_sort_order == Qt.SortOrder.DescendingOrder
 
         if logical_index == 0:  # Position
-            self.tracks_data.sort(key=lambda x: x['position'], reverse=reverse)
+            self.tracks_data.sort(key=lambda x: int(x['position']), reverse=reverse)
         elif logical_index == 1:  # Artist
             self.tracks_data.sort(key=lambda x: x['artist'].lower(), reverse=reverse)
         elif logical_index == 2:  # Track Name
