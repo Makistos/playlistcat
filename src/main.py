@@ -35,17 +35,6 @@ except ImportError:
     def validate_playlist_id(playlist_id):
         return playlist_id and playlist_id.startswith('PL') and len(playlist_id) > 10
 
-import sys
-import webbrowser
-from typing import List, Dict, Any, Optional
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QPushButton, QLineEdit, QLabel, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QProgressBar, QFrame
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont, QIcon
-from ytmusicapi import YTMusic
 
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -85,7 +74,8 @@ class PlaylistFetcher(QThread):
             self.ytmusic = YTMusic()
 
             self.progress_update.emit("Fetching playlist data...")
-            playlist_data = self.ytmusic.get_playlist(self.playlist_id)
+            playlist_data = self.ytmusic.get_playlist(
+                self.playlist_id, limit=None)
 
             if not playlist_data:
                 self.error_occurred.emit("Playlist not found or is private")
@@ -104,9 +94,11 @@ class PlaylistFetcher(QThread):
 
                 # Handle artists list
                 if 'artists' in track and track['artists']:
-                    artists = [artist.get('name', '') for artist in track['artists'] if artist]
+                    artists = [artist.get('name', '')
+                               for artist in track['artists'] if artist]
 
-                artist_str = ', '.join(artists) if artists else 'Unknown Artist'
+                artist_str = ', '.join(
+                    artists) if artists else 'Unknown Artist'
 
                 # Create YouTube Music URL
                 video_id = track.get('videoId', '')
@@ -168,7 +160,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         input_layout.addWidget(QLabel("Playlist ID:"))
 
         self.playlist_input = QLineEdit()
-        self.playlist_input.setPlaceholderText("Enter YouTube Music playlist ID (e.g., PLrAGlzNOGcAqFNKK0c4K8Z9U8QmFNKK0c)")
+        self.playlist_input.setPlaceholderText(
+            "Enter YouTube Music playlist ID (e.g., PLrAGlzNOGcAqFNKK0c4K8Z9U8QmFNKK0c)")
         self.playlist_input.returnPressed.connect(self.fetch_playlist)
         input_layout.addWidget(self.playlist_input)
 
@@ -211,18 +204,25 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         """Create and configure the tracks table."""
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Position", "Artist", "Track Name", "YouTube Music Link"])
+        self.table.setHorizontalHeaderLabels(
+            ["Position", "Artist", "Track Name", "YouTube Music Link"])
 
         # Configure table appearance
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # Position
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)        # Artist
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)           # Track Name
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Link
+        header.setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents)  # Position
+        header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Interactive)        # Artist
+        header.setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch)           # Track Name
+        header.setSectionResizeMode(
+            3, QHeaderView.ResizeMode.ResizeToContents)  # Link
 
         self.table.setAlternatingRowColors(True)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSortingEnabled(False)  # Disable built-in sorting, use custom logic
+        self.table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows)
+        # Disable built-in sorting, use custom logic
+        self.table.setSortingEnabled(False)
 
         # Connect double-click to open URL
         self.table.itemDoubleClicked.connect(self.open_track_url)
@@ -292,7 +292,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
         # Reset UI
         self.fetch_button.setEnabled(True)
-        self.refresh_button.setEnabled(bool(self.playlist_input.text().strip()))
+        self.refresh_button.setEnabled(
+            bool(self.playlist_input.text().strip()))
         self.progress_bar.setVisible(False)
         self.status_label.setText("Error occurred while fetching playlist")
 
@@ -355,11 +356,14 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         reverse = self.current_sort_order == Qt.SortOrder.DescendingOrder
 
         if logical_index == 0:  # Position
-            self.tracks_data.sort(key=lambda x: int(x['position']), reverse=reverse)
+            self.tracks_data.sort(key=lambda x: int(
+                x['position']), reverse=reverse)
         elif logical_index == 1:  # Artist
-            self.tracks_data.sort(key=lambda x: x['artist'].lower(), reverse=reverse)
+            self.tracks_data.sort(
+                key=lambda x: x['artist'].lower(), reverse=reverse)
         elif logical_index == 2:  # Track Name
-            self.tracks_data.sort(key=lambda x: x['title'].lower(), reverse=reverse)
+            self.tracks_data.sort(
+                key=lambda x: x['title'].lower(), reverse=reverse)
 
         # Repopulate table with sorted data
         self.populate_table()
@@ -367,7 +371,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         # Update status
         sort_order_text = "descending" if reverse else "ascending"
         column_names = ["Position", "Artist", "Track Name"]
-        self.status_label.setText(f"Sorted by {column_names[logical_index]} ({sort_order_text})")
+        self.status_label.setText(
+            f"Sorted by {column_names[logical_index]} ({sort_order_text})")
 
     def open_track_url(self, item: QTableWidgetItem):
         """Open the YouTube Music URL for the selected track."""
