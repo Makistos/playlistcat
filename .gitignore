@@ -179,5 +179,10 @@ release/
 *.tar.gz
 *.zip
 
+# AppImage build artifacts
+AppDir/
+*.AppImage
+appimagetool-*.AppImage
+
 # PyInstaller spec files (auto-generated)
 *.spec

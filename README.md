@@ -135,6 +135,19 @@ playlistcat/
 - Install xcb libraries: `sudo apt install libxcb-cursor0` (Ubuntu/Debian)
 - For headless environments, consider using the application in a virtual display
 
+**Linux executable won't run (glibc version errors)**:
+- The standalone executable requires glibc 2.31+ (Ubuntu 20.04+, Debian 11+)
+- For older systems: install Python and run from source instead:
+  ```bash
+  git clone https://github.com/Makistos/playlistcat.git
+  cd playlistcat
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt
+  python src/main.py
+  ```
+- Alternative: Use AppImage or Flatpak (coming soon)
+
 ## Requirements
 
 - Python 3.8+

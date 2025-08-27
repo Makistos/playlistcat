@@ -49,6 +49,36 @@ release/
 - Double-click `run-gui.bat` to launch PlaylistCat
 - Or run `playlistcat.exe` directly
 
+## 🔧 Linux Compatibility
+
+### glibc Requirements
+The Linux executable requires **glibc 2.31+**, which means:
+- ✅ **Ubuntu 20.04+** (glibc 2.31)
+- ✅ **Debian 11+** (glibc 2.31)
+- ✅ **CentOS 8+** (glibc 2.28+)
+- ❌ **Ubuntu 18.04** (glibc 2.27) - Not compatible
+
+### Solutions for Older Systems
+1. **Install from source**:
+   ```bash
+   git clone https://github.com/Makistos/playlistcat.git
+   cd playlistcat
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   python src/main.py
+   ```
+
+2. **Build AppImage** (coming soon):
+   ```bash
+   ./build-appimage.sh
+   ```
+
+3. **Use Docker**:
+   ```bash
+   docker run -it --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix playlistcat
+   ```
+
 ## 🔧 Build Requirements
 
 ### For Building (Development Machine):

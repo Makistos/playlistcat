@@ -45,6 +45,8 @@ pyinstaller --onefile --windowed --name playlistcat \
     --hidden-import PyQt6.QtWidgets \
     --hidden-import ytmusicapi \
     --hidden-import requests \
+    --strip \
+    --noupx \
     src/main.py || {
     echo "❌ GUI build failed"
     exit 1
