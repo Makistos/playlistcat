@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example usage of PlaylistCat
+Example usage of PlaylistCat with authentication features
 """
 
 # Example public playlist IDs for testing (these may or may not work depending on availability)
@@ -14,11 +14,14 @@ def main():
     print("PlaylistCat 🐱 - Example Usage")
     print("=" * 50)
     print()
-    print("Here are some example playlist IDs you can try:")
+
+    print("🔓 UNAUTHENTICATED MODE (No Login Required)")
+    print("-" * 50)
+    print("Here are some example PUBLIC playlist IDs you can try:")
     print()
 
     for name, playlist_id in EXAMPLE_PLAYLISTS.items():
-        print(f"{name}: {playlist_id}")
+        print(f"  {name}: {playlist_id}")
 
     print()
     print("To use these:")
@@ -26,14 +29,59 @@ def main():
     print("2. Enter one of the playlist IDs above")
     print("3. Click 'Fetch Playlist' or press Enter")
     print()
-    print("Note: These are public playlists from YouTube Music.")
-    print("If they don't work, try finding your own public playlist ID.")
+
+    print("🔐 AUTHENTICATED MODE (Login Required)")
+    print("-" * 50)
+    print("To access YOUR personal playlists:")
     print()
-    print("How to get your own playlist ID:")
+    print("1. Run the application: ./run.sh")
+    print("2. Click 'Login' in the Authentication section")
+    print("3. Follow the setup wizard:")
+    print("   - Open YouTube Music in browser")
+    print("   - Open Developer Tools (F12)")
+    print("   - Go to Network tab")
+    print("   - Refresh the page")
+    print("   - Copy a request as cURL")
+    print("   - Paste into PlaylistCat")
+    print("4. Select from your personal playlists dropdown")
+    print()
+
+    print("🎯 FEATURES COMPARISON")
+    print("-" * 50)
+    print("Unauthenticated Mode:")
+    print("  ✓ Access to public playlists")
+    print("  ✓ Manual playlist ID entry")
+    print("  ✓ All viewing and sorting features")
+    print("  ✗ No personal playlist access")
+    print()
+    print("Authenticated Mode:")
+    print("  ✓ All unauthenticated features")
+    print("  ✓ Personal playlist browsing")
+    print("  ✓ Playlist dropdown selection")
+    print("  ✓ Access to private playlists")
+    print("  ✓ Real-time playlist updates")
+    print()
+
+    print("💡 TIPS")
+    print("-" * 50)
+    print("- Start with unauthenticated mode to try the app")
+    print("- Use authentication only if you need personal playlists")
+    print("- Both modes work simultaneously - no restrictions")
+    print("- Authentication is optional and can be set up later")
+    print("- Logout anytime to return to unauthenticated mode")
+    print()
+
+    print("🔍 HOW TO GET PLAYLIST IDs")
+    print("-" * 50)
+    print("For public playlists:")
     print("1. Go to YouTube Music (music.youtube.com)")
     print("2. Open any public playlist")
     print("3. Copy the URL")
     print("4. Extract the part after 'list=' in the URL")
+    print()
+    print("For your playlists:")
+    print("1. Login to PlaylistCat (see Authentication Mode above)")
+    print("2. Select from dropdown - no manual ID needed!")
     print()
 
 if __name__ == "__main__":

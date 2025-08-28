@@ -37,6 +37,7 @@ echo ⌨️ Building GUI version...
 pyinstaller --onefile --windowed --name playlistcat ^
     --add-data "README.md;." ^
     --add-data "src\utils.py;." ^
+    --add-data "src\auth.py;." ^
     --hidden-import PyQt6.QtCore ^
     --hidden-import PyQt6.QtGui ^
     --hidden-import PyQt6.QtWidgets ^

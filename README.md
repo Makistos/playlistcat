@@ -6,11 +6,14 @@ A desktop application that fetches YouTube Music playlists and displays them in 
 
 ## Features
 
-- **Playlist Fetching**: Enter a YouTube Music playlist ID to fetch and display all tracks
+- **Public Playlist Access**: Enter any YouTube Music playlist ID to fetch and display tracks
+- **Personal Playlist Access**: Login to browse and access your personal playlists
 - **Sortable Display**: Sort by Position, Artist, or Track Name
 - **Direct Links**: Open any track directly in YouTube Music
-- **Refresh Function**: Update the current playlist with fresh data
+- **Refresh Function**: Update playlists with fresh data
 - **Modern GUI**: Clean Qt-based interface with mouse interaction
+- **Authentication**: Optional login for personal playlist access
+- **Dual Mode**: Works for both authenticated and unauthenticated users
 - **Standalone Packaging**: Create executables that run without Python installation
 
 ## Quick Start (Standalone)
@@ -78,12 +81,24 @@ python src/main.py
 4. Example: `PLrAGlzNOGcAqFNKK0c4K8Z9U8QmFNKK0c`
 
 ### Using the Application
+
+#### For Public Playlists (No Login Required)
 - Enter the playlist ID in the input field
 - Click "Fetch Playlist" or press Enter
 - Wait for the tracks to load
+
+#### For Personal Playlists (Login Required)
+- Click "Login" in the Authentication section
+- Follow the setup wizard to authenticate with YouTube Music
+- Select from your personal playlists dropdown
+- Or continue using manual playlist IDs
+
+#### General Usage
 - Click column headers to sort
 - Double-click any track to open in YouTube Music
 - Use "Refresh" to update the current playlist
+
+For detailed authentication setup, see [AUTHENTICATION.md](AUTHENTICATION.md).
 
 ## Table Columns / Display Format
 

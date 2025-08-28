@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
     QPushButton, QLineEdit, QLabel, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QProgressBar, QFrame
+    QHeaderView, QMessageBox, QProgressBar, QFrame, QComboBox, QGroupBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QIcon
@@ -22,8 +22,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from utils import extract_playlist_id, validate_playlist_id
+    from auth import AuthenticationManager as AuthManager
 except ImportError:
-    # Fallback if utils module is not found
+    # Fallback if modules are not found
     def extract_playlist_id(input_string):
         if not input_string:
             return None
@@ -35,24 +36,29 @@ except ImportError:
     def validate_playlist_id(playlist_id):
         return playlist_id and playlist_id.startswith('PL') and len(playlist_id) > 10
 
+    # Mock AuthenticationManager for fallback
+    class AuthManager:
+        def __init__(self):
+            self.is_authenticated = False
+            try:
+                self.ytmusic = YTMusic()
+            except:
+                self.ytmusic = None
 
-# Add the src directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        def get_ytmusic(self):
+            return self.ytmusic
 
-try:
-    from utils import extract_playlist_id, validate_playlist_id
-except ImportError:
-    # Fallback if utils module is not found
-    def extract_playlist_id(input_string):
-        if not input_string:
-            return None
-        input_string = input_string.strip()
-        if 'list=' in input_string:
-            return input_string.split('list=')[1].split('&')[0]
-        return input_string
+        def can_access_personal_content(self):
+            return False
 
-    def validate_playlist_id(playlist_id):
-        return playlist_id and playlist_id.startswith('PL') and len(playlist_id) > 10
+        def setup_authentication(self, parent=None):
+            return False
+
+        def logout(self):
+            pass
+
+        def load_saved_auth(self):
+            return False
 
 
 class PlaylistFetcher(QThread):
@@ -62,17 +68,14 @@ class PlaylistFetcher(QThread):
     error_occurred = pyqtSignal(str)
     progress_update = pyqtSignal(str)
 
-    def __init__(self, playlist_id: str):
+    def __init__(self, ytmusic: YTMusic, playlist_id: str):
         super().__init__()
+        self.ytmusic = ytmusic
         self.playlist_id = playlist_id
-        self.ytmusic = None
 
     def run(self):
         """Fetch playlist data in background thread."""
         try:
-            self.progress_update.emit("Initializing YouTube Music API...")
-            self.ytmusic = YTMusic()
-
             self.progress_update.emit("Fetching playlist data...")
             playlist_data = self.ytmusic.get_playlist(
                 self.playlist_id, limit=None)
@@ -119,19 +122,66 @@ class PlaylistFetcher(QThread):
             self.error_occurred.emit(f"Error fetching playlist: {str(e)}")
 
 
+class PersonalPlaylistFetcher(QThread):
+    """Background thread for fetching user's personal playlists."""
+
+    playlists_ready = pyqtSignal(list)
+    error_occurred = pyqtSignal(str)
+    progress_update = pyqtSignal(str)
+
+    def __init__(self, ytmusic: YTMusic):
+        super().__init__()
+        self.ytmusic = ytmusic
+
+    def run(self):
+        """Fetch personal playlists in background thread."""
+        try:
+            self.progress_update.emit("Fetching your playlists...")
+            playlists = self.ytmusic.get_library_playlists(limit=100)
+
+            formatted_playlists = []
+            for playlist in playlists:
+                formatted_playlists.append({
+                    'id': playlist.get('playlistId', ''),
+                    'title': playlist.get('title', 'Unknown Playlist'),
+                    'description': playlist.get('description', ''),
+                    'count': playlist.get('count', 0),
+                    'thumbnails': playlist.get('thumbnails', [])
+                })
+
+            self.progress_update.emit(f"Found {len(formatted_playlists)} playlists")
+            self.playlists_ready.emit(formatted_playlists)
+
+        except Exception as e:
+            self.error_occurred.emit(f"Error fetching playlists: {str(e)}")
+
+
 class YouTubeMusicPlaylistViewer(QMainWindow):
     """Main application window for YouTube Music Playlist Viewer."""
 
     def __init__(self):
         super().__init__()
         self.tracks_data = []
+        self.personal_playlists = []
         self.current_sort_column = 0
         self.current_sort_order = Qt.SortOrder.AscendingOrder
         self.fetcher_thread = None
+        self.playlist_fetcher_thread = None
 
+        # Initialize authentication manager
+        self.auth_manager = AuthManager()
+
+        # Initialize UI first
         self.init_ui()
         self.setWindowTitle("PlaylistCat - YouTube Music Playlist Viewer")
-        self.resize(1000, 600)
+        self.resize(1000, 700)
+
+        # Connect auth status changed signal if available (after UI is created)
+        if hasattr(self.auth_manager, 'auth_status_changed'):
+            self.auth_manager.auth_status_changed.connect(self.on_auth_status_changed)
+
+        # Try to load saved authentication (after UI and signal connection)
+        self.auth_manager.load_saved_auth()
 
     def init_ui(self):
         """Initialize the user interface."""
@@ -152,29 +202,13 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
 
+        # Authentication section
+        self.create_auth_section()
+        layout.addWidget(self.auth_frame)
+
         # Input section
-        input_frame = QFrame()
-        input_frame.setFrameStyle(QFrame.Shape.Box)
-        input_layout = QHBoxLayout(input_frame)
-
-        input_layout.addWidget(QLabel("Playlist ID:"))
-
-        self.playlist_input = QLineEdit()
-        self.playlist_input.setPlaceholderText(
-            "Enter YouTube Music playlist ID (e.g., PLrAGlzNOGcAqFNKK0c4K8Z9U8QmFNKK0c)")
-        self.playlist_input.returnPressed.connect(self.fetch_playlist)
-        input_layout.addWidget(self.playlist_input)
-
-        self.fetch_button = QPushButton("Fetch Playlist")
-        self.fetch_button.clicked.connect(self.fetch_playlist)
-        input_layout.addWidget(self.fetch_button)
-
-        self.refresh_button = QPushButton("Refresh")
-        self.refresh_button.clicked.connect(self.refresh_playlist)
-        self.refresh_button.setEnabled(False)
-        input_layout.addWidget(self.refresh_button)
-
-        layout.addWidget(input_frame)
+        self.create_input_section()
+        layout.addWidget(self.input_frame)
 
         # Progress bar
         self.progress_bar = QProgressBar()
@@ -182,7 +216,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         layout.addWidget(self.progress_bar)
 
         # Status label
-        self.status_label = QLabel("Enter a playlist ID to get started")
+        self.status_label = QLabel("Enter a playlist ID to get started or login to access your playlists")
         self.status_label.setStyleSheet("color: gray; font-style: italic;")
         layout.addWidget(self.status_label)
 
@@ -193,12 +227,75 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         # Instructions
         instructions = QLabel(
             "Instructions:\n"
+            "• Login to access your personal playlists, or\n"
             "• Enter a YouTube Music playlist ID and click 'Fetch Playlist'\n"
             "• Click column headers to sort by Position, Artist, or Track Name\n"
             "• Double-click any row to open the track in YouTube Music"
         )
         instructions.setStyleSheet("color: gray; font-size: 10px;")
         layout.addWidget(instructions)
+
+    def create_auth_section(self):
+        """Create authentication section of the UI"""
+        self.auth_frame = QGroupBox("Authentication")
+        auth_layout = QHBoxLayout(self.auth_frame)
+
+        # Authentication status
+        self.auth_status_label = QLabel("Not logged in - Public playlists only")
+        self.auth_status_label.setStyleSheet("color: orange; font-weight: bold;")
+        auth_layout.addWidget(self.auth_status_label)
+
+        auth_layout.addStretch()
+
+        # Login/Logout button
+        self.auth_button = QPushButton("Login")
+        self.auth_button.clicked.connect(self.toggle_authentication)
+        auth_layout.addWidget(self.auth_button)
+
+    def create_input_section(self):
+        """Create input section of the UI"""
+        self.input_frame = QFrame()
+        self.input_frame.setFrameStyle(QFrame.Shape.Box)
+        input_layout = QVBoxLayout(self.input_frame)
+
+        # Personal playlists section (only visible when authenticated)
+        personal_layout = QHBoxLayout()
+        personal_layout.addWidget(QLabel("Your Playlists:"))
+
+        self.personal_playlist_combo = QComboBox()
+        self.personal_playlist_combo.addItem("Select a playlist...")
+        self.personal_playlist_combo.currentTextChanged.connect(self.on_personal_playlist_selected)
+        personal_layout.addWidget(self.personal_playlist_combo)
+
+        self.refresh_playlists_button = QPushButton("Refresh Playlists")
+        self.refresh_playlists_button.clicked.connect(self.refresh_personal_playlists)
+        personal_layout.addWidget(self.refresh_playlists_button)
+
+        self.personal_frame = QWidget()
+        self.personal_frame.setLayout(personal_layout)
+        self.personal_frame.setVisible(False)  # Hidden by default
+        input_layout.addWidget(self.personal_frame)
+
+        # Manual playlist ID section
+        manual_layout = QHBoxLayout()
+        manual_layout.addWidget(QLabel("Playlist ID:"))
+
+        self.playlist_input = QLineEdit()
+        self.playlist_input.setPlaceholderText(
+            "Enter YouTube Music playlist ID (e.g., PLrAGlzNOGcAqFNKK0c4K8Z9U8QmFNKK0c)")
+        self.playlist_input.returnPressed.connect(self.fetch_playlist)
+        manual_layout.addWidget(self.playlist_input)
+
+        self.fetch_button = QPushButton("Fetch Playlist")
+        self.fetch_button.clicked.connect(self.fetch_playlist)
+        manual_layout.addWidget(self.fetch_button)
+
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.clicked.connect(self.refresh_playlist)
+        self.refresh_button.setEnabled(False)
+        manual_layout.addWidget(self.refresh_button)
+
+        input_layout.addLayout(manual_layout)
 
     def create_table(self):
         """Create and configure the tracks table."""
@@ -209,14 +306,15 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
         # Configure table appearance
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents)  # Position
-        header.setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Interactive)        # Artist
-        header.setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch)           # Track Name
-        header.setSectionResizeMode(
-            3, QHeaderView.ResizeMode.ResizeToContents)  # Link
+        if header:
+            header.setSectionResizeMode(
+                0, QHeaderView.ResizeMode.ResizeToContents)  # Position
+            header.setSectionResizeMode(
+                1, QHeaderView.ResizeMode.Interactive)        # Artist
+            header.setSectionResizeMode(
+                2, QHeaderView.ResizeMode.Stretch)           # Track Name
+            header.setSectionResizeMode(
+                3, QHeaderView.ResizeMode.ResizeToContents)  # Link
 
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(
@@ -228,7 +326,96 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.table.itemDoubleClicked.connect(self.open_track_url)
 
         # Connect header clicks for custom sorting
-        header.sectionClicked.connect(self.sort_table)
+        if header:
+            header.sectionClicked.connect(self.sort_table)
+
+    def toggle_authentication(self):
+        """Toggle between login and logout"""
+        if hasattr(self.auth_manager, 'is_authenticated') and self.auth_manager.is_authenticated:
+            self.logout()
+        else:
+            self.login()
+
+    def login(self):
+        """Handle user login"""
+        if hasattr(self.auth_manager, 'setup_authentication'):
+            success = self.auth_manager.setup_authentication(self)
+            if success:
+                QMessageBox.information(self, "Success", "Successfully logged in!")
+                self.refresh_personal_playlists()
+            else:
+                QMessageBox.warning(self, "Failed", "Login failed. Please try again.")
+
+    def logout(self):
+        """Handle user logout"""
+        if hasattr(self.auth_manager, 'logout'):
+            self.auth_manager.logout()
+            QMessageBox.information(self, "Logged Out", "You have been logged out.")
+
+    def on_auth_status_changed(self, is_authenticated: bool):
+        """Handle authentication status changes"""
+        if is_authenticated:
+            self.auth_status_label.setText("Logged in - Access to personal playlists")
+            self.auth_status_label.setStyleSheet("color: green; font-weight: bold;")
+            self.auth_button.setText("Logout")
+            self.personal_frame.setVisible(True)
+            self.status_label.setText("Select one of your playlists or enter a playlist ID")
+        else:
+            self.auth_status_label.setText("Not logged in - Public playlists only")
+            self.auth_status_label.setStyleSheet("color: orange; font-weight: bold;")
+            self.auth_button.setText("Login")
+            self.personal_frame.setVisible(False)
+            self.personal_playlist_combo.clear()
+            self.personal_playlist_combo.addItem("Select a playlist...")
+            self.status_label.setText("Enter a playlist ID to get started or login to access your playlists")
+
+    def refresh_personal_playlists(self):
+        """Refresh the list of personal playlists"""
+        if not hasattr(self.auth_manager, 'can_access_personal_content') or not self.auth_manager.can_access_personal_content():
+            return
+
+        if self.playlist_fetcher_thread and self.playlist_fetcher_thread.isRunning():
+            self.playlist_fetcher_thread.terminate()
+            self.playlist_fetcher_thread.wait()
+
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, 0)
+        self.status_label.setText("Fetching your playlists...")
+
+        ytmusic = self.auth_manager.get_ytmusic()
+        if ytmusic:
+            self.playlist_fetcher_thread = PersonalPlaylistFetcher(ytmusic)
+            self.playlist_fetcher_thread.playlists_ready.connect(self.on_personal_playlists_ready)
+            self.playlist_fetcher_thread.error_occurred.connect(self.on_error)
+            self.playlist_fetcher_thread.progress_update.connect(self.on_progress_update)
+            self.playlist_fetcher_thread.start()
+
+    def on_personal_playlists_ready(self, playlists: List[Dict[str, Any]]):
+        """Handle personal playlists fetch completion"""
+        self.personal_playlists = playlists
+        self.personal_playlist_combo.clear()
+        self.personal_playlist_combo.addItem("Select a playlist...")
+
+        for playlist in playlists:
+            title = playlist['title']
+            count = playlist.get('count', 0)
+            display_text = f"{title} ({count} tracks)"
+            self.personal_playlist_combo.addItem(display_text, playlist['id'])
+
+        self.progress_bar.setVisible(False)
+        self.status_label.setText(f"Found {len(playlists)} personal playlists")
+
+    def on_personal_playlist_selected(self, text: str):
+        """Handle personal playlist selection"""
+        if text == "Select a playlist...":
+            return
+
+        current_index = self.personal_playlist_combo.currentIndex()
+        if current_index > 0:  # Skip the first "Select a playlist..." item
+            playlist_id = self.personal_playlist_combo.itemData(current_index)
+            if playlist_id:
+                self.playlist_input.setText(playlist_id)
+                self.fetch_playlist()
 
     def fetch_playlist(self):
         """Fetch playlist data from YouTube Music."""
@@ -268,12 +455,20 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.progress_bar.setRange(0, 0)  # Indeterminate progress
         self.status_label.setText("Fetching playlist...")
 
-        # Start background thread
-        self.fetcher_thread = PlaylistFetcher(playlist_id)
-        self.fetcher_thread.data_ready.connect(self.on_data_ready)
-        self.fetcher_thread.error_occurred.connect(self.on_error)
-        self.fetcher_thread.progress_update.connect(self.on_progress_update)
-        self.fetcher_thread.start()
+        # Get YTMusic instance from auth manager
+        ytmusic = self.auth_manager.get_ytmusic()
+        if ytmusic:
+            # Start background thread
+            self.fetcher_thread = PlaylistFetcher(ytmusic, playlist_id)
+            self.fetcher_thread.data_ready.connect(self.on_data_ready)
+            self.fetcher_thread.error_occurred.connect(self.on_error)
+            self.fetcher_thread.progress_update.connect(self.on_progress_update)
+            self.fetcher_thread.start()
+        else:
+            QMessageBox.critical(self, "Error", "YouTube Music API not available")
+            self.fetch_button.setEnabled(True)
+            self.refresh_button.setEnabled(True)
+            self.progress_bar.setVisible(False)
 
     def on_data_ready(self, tracks: List[Dict[str, Any]]):
         """Handle successful data fetch."""
@@ -383,7 +578,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             url = url_item.data(Qt.ItemDataRole.UserRole)
             webbrowser.open(url)
         else:
-            track_name = self.table.item(row, 2).text()
+            track_item = self.table.item(row, 2)
+            track_name = track_item.text() if track_item else "Unknown Track"
             QMessageBox.information(
                 self,
                 "No URL Available",
