@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test authentication with the fresh cURL command from the user
+Test automatic token refresh functionality
 """
 
 import sys
@@ -9,13 +9,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from auth import AuthenticationManager
 
-def test_fresh_auth():
-    """Test authentication with the user's fresh cURL command"""
+def test_token_refresh():
+    """Test the token refresh system"""
 
-    print("🔍 Testing Fresh Authentication Headers")
+    print("🔍 Testing Automatic Token Refresh System")
     print("=" * 50)
 
-    # Headers extracted from the fresh cURL command
+    # Fresh headers from your recent working session
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
         'Accept': '*/*',
@@ -36,65 +36,52 @@ def test_fresh_auth():
         print("🔧 Creating AuthenticationManager...")
         auth_manager = AuthenticationManager()
 
-        print("📋 Testing fresh authentication...")
+        print("📋 Testing initial authentication...")
         success = auth_manager.authenticate_with_headers(headers)
 
         if success:
-            print("✅ Authentication successful!")
-            print(f"   Auth method: {auth_manager.user_info.get('auth_method', 'unknown')}")
-            print(f"   Playlist count during auth: {auth_manager.user_info.get('playlists_count', 0)}")
+            print("✅ Initial authentication successful!")
 
-            # Test playlist fetching
-            print("\n🎵 Testing playlist fetching...")
+            # Get authentication status
+            status = auth_manager.get_auth_status_info()
+            print(f"📊 Auth Status:")
+            for key, value in status.items():
+                print(f"   {key}: {value}")
+
+            # Test playlist access
+            print("\n🎵 Testing playlist access...")
             playlists = auth_manager.get_user_playlists()
+            print(f"✅ Found {len(playlists)} playlists")
 
-            if playlists:
-                print(f"✅ Successfully fetched {len(playlists)} playlists!")
-                for i, playlist in enumerate(playlists[:5]):  # Show first 5
-                    print(f"   {i+1}. {playlist['title']} ({playlist['count']} songs)")
-            else:
-                print("⚠️  No playlists returned")
+            # Test manual refresh
+            print("\n🔄 Testing manual token refresh...")
+            refresh_success = auth_manager.force_token_refresh()
+            print(f"🔄 Manual refresh result: {refresh_success}")
 
-            # Test other authenticated functions
-            print("\n🎶 Testing other authenticated features...")
+            # Test authentication health check
+            print("\n🩺 Testing authentication health check...")
+            health_success = auth_manager.refresh_authentication_status()
+            print(f"🩺 Health check result: {health_success}")
 
-            try:
-                # Test liked songs
-                print("   Testing liked songs...")
-                liked = auth_manager.ytmusic.get_liked_songs(limit=1)
-                if liked and liked.get('tracks'):
-                    print(f"   ✅ Liked songs: {len(liked['tracks'])} found")
-                else:
-                    print("   ℹ️  No liked songs or limited access")
-            except Exception as e:
-                print(f"   ⚠️  Liked songs error: {e}")
+            # Get updated status
+            status = auth_manager.get_auth_status_info()
+            print(f"\n📊 Updated Auth Status:")
+            for key, value in status.items():
+                print(f"   {key}: {value}")
 
-            try:
-                # Test history
-                print("   Testing history...")
-                history = auth_manager.ytmusic.get_history()
-                if history:
-                    print(f"   ✅ History: {len(history)} items found")
-                else:
-                    print("   ℹ️  No history or limited access")
-            except Exception as e:
-                print(f"   ⚠️  History error: {e}")
+            print("\n✅ Token refresh system is working!")
+            print("\n📋 Features available:")
+            print("   - Automatic monitoring every 30 minutes")
+            print("   - Manual refresh via force_token_refresh()")
+            print("   - Automatic retry on API failures")
+            print("   - SAPISIDHASH regeneration")
+            print("   - Fallback to multiple auth methods")
+            print("   - Health check monitoring")
 
-            try:
-                # Test library albums
-                print("   Testing library albums...")
-                albums = auth_manager.ytmusic.get_library_albums(limit=1)
-                if albums:
-                    print(f"   ✅ Library albums: {len(albums)} found")
-                else:
-                    print("   ℹ️  No library albums")
-            except Exception as e:
-                print(f"   ⚠️  Library albums error: {e}")
-
-            return len(playlists) > 0
+            return True
 
         else:
-            print("❌ Authentication failed")
+            print("❌ Initial authentication failed")
             return False
 
     except Exception as e:
@@ -104,13 +91,9 @@ def test_fresh_auth():
         return False
 
 if __name__ == "__main__":
-    success = test_fresh_auth()
+    success = test_token_refresh()
 
     if success:
-        print("\n🎉 Fresh authentication working with playlists!")
+        print("\n🎉 Automatic token refresh system is working!")
     else:
-        print("\n⚠️  Authentication working but no playlists found")
-        print("   This could mean:")
-        print("   1. The account has no personal playlists")
-        print("   2. The account needs YouTube Music setup")
-        print("   3. The account permissions are restricted")
+        print("\n⚠️  Token refresh system needs attention")

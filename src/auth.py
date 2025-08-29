@@ -9,8 +9,10 @@ import json
 import tempfile
 import webbrowser
 import shlex
+import time
+import requests
 from typing import Optional, Dict, List, Any
-from PyQt6.QtCore import QObject, pyqtSignal, QThread
+from PyQt6.QtCore import QObject, pyqtSignal, QThread, QTimer
 from PyQt6.QtWidgets import QMessageBox, QInputDialog, QDialog, QVBoxLayout, QPushButton, QLabel, QTextEdit
 from ytmusicapi import YTMusic
 
@@ -237,7 +239,7 @@ class PlaylistFetcher(QThread):
 
 
 class AuthenticationManager(QObject):
-    """Manages YouTube Music authentication state and operations"""
+    """Manages YouTube Music authentication state and operations with automatic token refresh"""
 
     # Signals
     auth_status_changed = pyqtSignal(bool)  # True if authenticated, False if not
@@ -250,6 +252,17 @@ class AuthenticationManager(QObject):
         self.ytmusic = None
         self.auth_session = None  # Store authenticated requests session
         self.auth_file_path = os.path.join(os.path.expanduser("~"), ".playlistcat_auth.json")
+
+        # Token refresh management
+        self.last_auth_headers = None  # Store original headers for refresh
+        self.last_auth_time = None     # Track when we last authenticated
+        self.auth_retry_count = 0      # Track retry attempts
+        self.max_auth_retries = 3      # Maximum automatic retry attempts
+
+        # Set up automatic token validation timer (check every 30 minutes)
+        self.auth_check_timer = QTimer()
+        self.auth_check_timer.timeout.connect(self._check_authentication_health)
+        self.auth_check_timer.setInterval(30 * 60 * 1000)  # 30 minutes
 
         # Initialize with unauthenticated YTMusic
         self.init_unauthenticated()
@@ -445,6 +458,14 @@ class AuthenticationManager(QObject):
             self.is_authenticated = True
             self.auth_session = session
 
+            # Store authentication info for refresh
+            self.last_auth_headers = headers.copy()
+            self.last_auth_time = time.time()
+            self.auth_retry_count = 0  # Reset retry count on successful auth
+
+            # Start authentication health monitoring
+            self.auth_check_timer.start()
+
             # Update user info based on successful method
             playlist_count = len(playlists) if playlists else 0
 
@@ -483,6 +504,155 @@ class AuthenticationManager(QObject):
             # Fall back to unauthenticated mode
             self.init_unauthenticated()
             return False
+
+    def _check_authentication_health(self):
+        """Periodically check if authentication is still valid and attempt refresh if needed"""
+        if not self.is_authenticated or not self.ytmusic:
+            return
+
+        try:
+            print("🔍 Checking authentication health...")
+            # Try a simple API call to test authentication
+            test_playlists = self.ytmusic.get_library_playlists(limit=1)
+            print(f"✅ Authentication health check passed ({len(test_playlists)} playlists)")
+            self.auth_retry_count = 0  # Reset retry count on success
+
+        except Exception as e:
+            print(f"⚠️  Authentication health check failed: {e}")
+            self._attempt_token_refresh()
+
+    def _attempt_token_refresh(self):
+        """Attempt to refresh authentication using stored headers"""
+        if self.auth_retry_count >= self.max_auth_retries:
+            print(f"❌ Maximum authentication retries ({self.max_auth_retries}) exceeded")
+            self._handle_authentication_failure()
+            return
+
+        self.auth_retry_count += 1
+        print(f"🔧 Attempting authentication refresh (attempt {self.auth_retry_count}/{self.max_auth_retries})...")
+
+        try:
+            # Method 1: Try to regenerate authentication from stored headers
+            if self.last_auth_headers:
+                print("🔧 Refreshing using stored headers...")
+                if self._refresh_from_headers():
+                    print("✅ Token refresh successful using stored headers")
+                    return
+
+            # Method 2: Try to reload from auth file
+            if os.path.exists(self.auth_file_path):
+                print("🔧 Refreshing using saved auth file...")
+                if self._refresh_from_auth_file():
+                    print("✅ Token refresh successful using auth file")
+                    return
+
+            # Method 3: Try to recreate session with existing cookies
+            if self.auth_session:
+                print("🔧 Refreshing using existing session...")
+                if self._refresh_from_session():
+                    print("✅ Token refresh successful using session")
+                    return
+
+            print("⚠️  All refresh methods failed")
+            self._handle_authentication_failure()
+
+        except Exception as e:
+            print(f"❌ Token refresh failed: {e}")
+            self._handle_authentication_failure()
+
+    def _refresh_from_headers(self) -> bool:
+        """Try to refresh authentication using stored headers"""
+        try:
+            if not self.last_auth_headers:
+                return False
+
+            # Regenerate SAPISIDHASH with new timestamp
+            import hashlib
+            cookie_header = self.last_auth_headers.get('Cookie', '')
+
+            # Extract SAPISID for new hash
+            sapisid = None
+            for cookie in cookie_header.split(';'):
+                cookie = cookie.strip()
+                if cookie.startswith('SAPISID='):
+                    sapisid = cookie.split('=', 1)[1]
+                    break
+
+            if sapisid:
+                # Generate new SAPISIDHASH with current timestamp
+                timestamp = str(int(time.time()))
+                origin = "https://music.youtube.com"
+                hash_string = f"{timestamp} {sapisid} {origin}"
+                sapisidhash = hashlib.sha1(hash_string.encode()).hexdigest()
+                authorization_header = f"SAPISIDHASH {timestamp}_{sapisidhash}"
+
+                # Update session headers
+                if self.auth_session:
+                    self.auth_session.headers['Authorization'] = authorization_header
+
+                print("✅ Generated fresh SAPISIDHASH")
+
+                # Test the refreshed authentication
+                test_ytmusic = YTMusic(requests_session=self.auth_session)
+                test_playlists = test_ytmusic.get_library_playlists(limit=1)
+
+                # Update YTMusic instance if successful
+                self.ytmusic = test_ytmusic
+                self.last_auth_time = time.time()
+                return True
+
+        except Exception as e:
+            print(f"Header refresh failed: {e}")
+
+        return False
+
+    def _refresh_from_auth_file(self) -> bool:
+        """Try to refresh authentication using saved auth file"""
+        try:
+            # Recreate YTMusic from auth file
+            new_ytmusic = YTMusic(self.auth_file_path)
+            test_playlists = new_ytmusic.get_library_playlists(limit=1)
+
+            # Update YTMusic instance if successful
+            self.ytmusic = new_ytmusic
+            self.last_auth_time = time.time()
+            return True
+
+        except Exception as e:
+            print(f"Auth file refresh failed: {e}")
+
+        return False
+
+    def _refresh_from_session(self) -> bool:
+        """Try to refresh authentication using existing session"""
+        try:
+            # Recreate YTMusic with existing session
+            new_ytmusic = YTMusic(requests_session=self.auth_session)
+            test_playlists = new_ytmusic.get_library_playlists(limit=1)
+
+            # Update YTMusic instance if successful
+            self.ytmusic = new_ytmusic
+            self.last_auth_time = time.time()
+            return True
+
+        except Exception as e:
+            print(f"Session refresh failed: {e}")
+
+        return False
+
+    def _handle_authentication_failure(self):
+        """Handle authentication failure by falling back to unauthenticated mode"""
+        print("❌ Authentication refresh failed - falling back to unauthenticated mode")
+        self.auth_check_timer.stop()
+        self.init_unauthenticated()
+        self.auth_status_changed.emit(False)
+
+    def force_token_refresh(self) -> bool:
+        """Manually force a token refresh (useful for testing or when user reports issues)"""
+        print("🔧 Manual token refresh requested...")
+        self.auth_retry_count = 0  # Reset retry count for manual refresh
+        self._attempt_token_refresh()
+        return self.is_authenticated
 
     def load_saved_auth(self) -> bool:
         """Load previously saved authentication data"""
@@ -524,28 +694,70 @@ class AuthenticationManager(QObject):
 
     def logout(self):
         """Logout and return to unauthenticated mode"""
+        print("🚪 Logging out...")
+
+        # Stop authentication monitoring
+        if hasattr(self, 'auth_check_timer'):
+            self.auth_check_timer.stop()
+
+        # Clear authentication state
         self.is_authenticated = False
         self.user_info = {}
+        self.last_auth_headers = None
+        self.last_auth_time = None
+        self.auth_retry_count = 0
+        self.auth_session = None
 
         # Remove saved auth data
         try:
             if os.path.exists(self.auth_file_path):
                 os.unlink(self.auth_file_path)
+                print("🗑️  Removed saved authentication data")
         except:
             pass
 
         # Reinitialize in unauthenticated mode
         self.init_unauthenticated()
+        print("✅ Logout complete")
 
     def get_user_playlists(self) -> List[Dict[str, Any]]:
-        """Get user's personal playlists (only works when authenticated)"""
+        """Get user's personal playlists (only works when authenticated) with automatic retry"""
         if not self.is_authenticated or not self.ytmusic:
             print("Not authenticated or no YTMusic instance")
             return []
 
         try:
             print("🎵 Attempting to fetch user playlists...")
+
+            # First try library playlists
             playlists = self.ytmusic.get_library_playlists(limit=100)
+            print(f"✅ Found {len(playlists)} playlists in library")
+
+            # If library playlists is empty, try searching for user's own playlists
+            if not playlists:
+                print("🔍 Library playlists empty, searching for user playlists...")
+                try:
+                    # Get account info to find user details
+                    account_info = self.ytmusic.get_account_info()
+
+                    # Try to search for playlists created by this user
+                    search_results = self.ytmusic.search("", filter="playlists", limit=20)
+
+                    # Filter for playlists that belong to the user
+                    user_playlists = []
+                    if search_results and account_info:
+                        for item in search_results:
+                            # Check if this playlist belongs to the user
+                            if item.get('author') and account_info:
+                                user_playlists.append(item)
+
+                    if user_playlists:
+                        playlists = user_playlists
+                        print(f"✅ Found {len(playlists)} playlists via search!")
+
+                except Exception as search_error:
+                    print(f"⚠️ Search method failed: {search_error}")
+
             formatted_playlists = []
 
             for playlist in playlists:
@@ -558,44 +770,44 @@ class AuthenticationManager(QObject):
                 })
 
             print(f"✅ Successfully fetched {len(formatted_playlists)} playlists")
+            # Reset retry count on successful operation
+            self.auth_retry_count = 0
             return formatted_playlists
 
         except Exception as e:
-            error_msg = str(e)
+            error_msg = str(e).lower()
             print(f"❌ Failed to get user playlists: {e}")
 
-            # If we get the authentication error, try to re-authenticate
-            if "authentication" in error_msg.lower():
-                print("🔧 Authentication issue detected, trying to refresh...")
+            # Check for authentication-related errors and attempt refresh
+            if any(term in error_msg for term in ["authentication", "401", "unauthorized", "403", "forbidden", "invalid", "expired"]):
+                print("🔧 Authentication issue detected, attempting automatic refresh...")
 
-                # If we have a saved auth session, try to create a new YTMusic instance
-                if hasattr(self, 'auth_session') and self.auth_session:
+                # Try automatic token refresh
+                if self.force_token_refresh():
+                    # Retry the operation after successful refresh
                     try:
-                        # Try to recreate YTMusic with the auth file
-                        if os.path.exists(self.auth_file_path):
-                            print("🔧 Trying to reinitialize with auth file...")
-                            self.ytmusic = YTMusic(self.auth_file_path)
-                            # Retry the playlist fetch
-                            playlists = self.ytmusic.get_library_playlists(limit=100)
-                            print(f"✅ Re-authentication successful, got {len(playlists)} playlists")
+                        print("🔄 Retrying playlist fetch after token refresh...")
+                        playlists = self.ytmusic.get_library_playlists(limit=100)
+                        formatted_playlists = []
 
-                            formatted_playlists = []
-                            for playlist in playlists:
-                                formatted_playlists.append({
-                                    'id': playlist.get('playlistId', ''),
-                                    'title': playlist.get('title', 'Unknown Playlist'),
-                                    'description': playlist.get('description', ''),
-                                    'count': playlist.get('count', 0),
-                                    'thumbnails': playlist.get('thumbnails', [])
-                                })
+                        for playlist in playlists:
+                            formatted_playlists.append({
+                                'id': playlist.get('playlistId', ''),
+                                'title': playlist.get('title', 'Unknown Playlist'),
+                                'description': playlist.get('description', ''),
+                                'count': playlist.get('count', 0),
+                                'thumbnails': playlist.get('thumbnails', [])
+                            })
 
-                            return formatted_playlists
+                        print(f"✅ Retry successful! Got {len(formatted_playlists)} playlists after refresh")
+                        return formatted_playlists
 
                     except Exception as retry_error:
-                        print(f"⚠️  Re-authentication failed: {retry_error}")
+                        print(f"❌ Retry failed even after token refresh: {retry_error}")
 
-                # If re-auth fails, provide helpful message
-                print("ℹ️  Library access requires fresh authentication. Please logout and login again.")
+                # If refresh fails, provide helpful message
+                print("ℹ️  Automatic token refresh failed. Library access requires fresh authentication.")
+                print("ℹ️  Please logout and login again with a fresh cURL command.")
 
             return []
 
@@ -606,3 +818,29 @@ class AuthenticationManager(QObject):
     def can_access_personal_content(self) -> bool:
         """Check if we can access personal content"""
         return self.is_authenticated and self.ytmusic is not None
+
+    def get_auth_status_info(self) -> Dict[str, Any]:
+        """Get detailed authentication status information"""
+        info = {
+            'is_authenticated': self.is_authenticated,
+            'can_access_personal': self.can_access_personal_content(),
+            'auth_retry_count': self.auth_retry_count,
+            'max_retries': self.max_auth_retries,
+            'monitoring_active': self.auth_check_timer.isActive() if hasattr(self, 'auth_check_timer') else False
+        }
+
+        if self.last_auth_time:
+            auth_age = time.time() - self.last_auth_time
+            info['auth_age_minutes'] = int(auth_age / 60)
+            info['auth_age_hours'] = round(auth_age / 3600, 1)
+
+        if self.user_info:
+            info.update(self.user_info)
+
+        return info
+
+    def refresh_authentication_status(self) -> bool:
+        """Manually trigger an authentication health check and refresh if needed"""
+        if self.is_authenticated:
+            self._check_authentication_health()
+        return self.is_authenticated

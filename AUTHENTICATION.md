@@ -16,6 +16,22 @@ PlaylistCat supports two modes of operation:
    - Browse your library
    - Requires one-time setup
    - **Authentication system verified and functional**
+   - **Automatic token refresh and monitoring**
+
+## Authentication Features ✨
+
+### **Automatic Token Refresh**
+- **Background monitoring** every 30 minutes
+- **Automatic retry** when authentication fails
+- **Smart refresh** using multiple fallback methods
+- **SAPISIDHASH regeneration** for session renewal
+- **No manual intervention** required in most cases
+
+### **Authentication Methods**
+- **Browser header extraction** from Firefox/Chrome
+- **Session-based authentication** with cookie management
+- **Fallback support** for different authentication states
+- **Health monitoring** with automatic recovery
 
 ## Getting Started (Unauthenticated)
 
@@ -133,6 +149,32 @@ If authentication isn't working:
 1. **Use manual playlist IDs**: You can still access public playlists
 2. **Public mode**: The app continues to work normally
 3. **No loss of functionality**: All core features remain available
+
+## Token Refresh & Session Management 🔄
+
+### Automatic Features
+- **Background Monitoring**: Checks authentication health every 30 minutes
+- **Smart Refresh**: Automatically refreshes tokens when they expire
+- **Multiple Fallback Methods**:
+  - SAPISIDHASH regeneration with fresh timestamps
+  - Auth file recreation and validation
+  - Session cookie refresh
+  - Automatic retry with exponential backoff
+
+### Manual Options
+- **Force Refresh**: Use "Refresh Playlists" button to manually trigger refresh
+- **Re-authentication**: Logout and login again for complete reset
+- **Health Check**: Authentication status is continuously monitored
+
+### Session Lifetime
+- **Typical Duration**: Sessions last several hours to days
+- **Automatic Renewal**: Tokens are refreshed before expiration
+- **Graceful Degradation**: Falls back to public mode if refresh fails
+
+### Token Security
+- **Local Storage**: Authentication data saved securely in user home directory
+- **Automatic Cleanup**: Old tokens removed on logout
+- **No Password Storage**: Only session tokens stored, never passwords
 
 ## Advanced Usage
 

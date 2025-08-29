@@ -247,6 +247,13 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
         auth_layout.addStretch()
 
+        # Force Auth Refresh button (only visible when authenticated)
+        self.refresh_auth_button = QPushButton("Refresh Auth")
+        self.refresh_auth_button.clicked.connect(self.force_auth_refresh)
+        self.refresh_auth_button.setVisible(False)  # Hidden by default
+        self.refresh_auth_button.setToolTip("Force refresh authentication tokens")
+        auth_layout.addWidget(self.refresh_auth_button)
+
         # Login/Logout button
         self.auth_button = QPushButton("Login")
         self.auth_button.clicked.connect(self.toggle_authentication)
@@ -267,7 +274,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.personal_playlist_combo.currentTextChanged.connect(self.on_personal_playlist_selected)
         personal_layout.addWidget(self.personal_playlist_combo)
 
-        self.refresh_playlists_button = QPushButton("Refresh Playlists")
+        self.refresh_playlists_button = QPushButton("Refresh Playlists (Auto Token Refresh)")
         self.refresh_playlists_button.clicked.connect(self.refresh_personal_playlists)
         personal_layout.addWidget(self.refresh_playlists_button)
 
@@ -358,22 +365,27 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             self.auth_status_label.setText("Logged in - Access to personal playlists")
             self.auth_status_label.setStyleSheet("color: green; font-weight: bold;")
             self.auth_button.setText("Logout")
+            self.refresh_auth_button.setVisible(True)  # Show refresh auth button
             self.personal_frame.setVisible(True)
             self.status_label.setText("Select one of your playlists or enter a playlist ID")
         else:
             self.auth_status_label.setText("Not logged in - Public playlists only")
             self.auth_status_label.setStyleSheet("color: orange; font-weight: bold;")
             self.auth_button.setText("Login")
+            self.refresh_auth_button.setVisible(False)  # Hide refresh auth button
             self.personal_frame.setVisible(False)
             self.personal_playlist_combo.clear()
             self.personal_playlist_combo.addItem("Select a playlist...")
             self.status_label.setText("Enter a playlist ID to get started or login to access your playlists")
 
     def refresh_personal_playlists(self):
-        """Refresh the list of personal playlists"""
+        """Refresh the list of personal playlists with automatic token refresh"""
         if not hasattr(self.auth_manager, 'can_access_personal_content') or not self.auth_manager.can_access_personal_content():
+            QMessageBox.information(self, "Not Authenticated",
+                                  "Please login first to access your personal playlists.")
             return
 
+        # Stop any running playlist fetcher
         if self.playlist_fetcher_thread and self.playlist_fetcher_thread.isRunning():
             self.playlist_fetcher_thread.terminate()
             self.playlist_fetcher_thread.wait()
@@ -381,14 +393,111 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
         self.status_label.setText("Fetching your playlists...")
+        self.refresh_playlists_button.setEnabled(False)
 
-        ytmusic = self.auth_manager.get_ytmusic()
-        if ytmusic:
-            self.playlist_fetcher_thread = PersonalPlaylistFetcher(ytmusic)
-            self.playlist_fetcher_thread.playlists_ready.connect(self.on_personal_playlists_ready)
-            self.playlist_fetcher_thread.error_occurred.connect(self.on_error)
-            self.playlist_fetcher_thread.progress_update.connect(self.on_progress_update)
-            self.playlist_fetcher_thread.start()
+        # Use the authentication manager's get_user_playlists which has token refresh
+        try:
+            print("🔄 Refreshing playlists using auth manager...")
+            playlists = self.auth_manager.get_user_playlists()
+
+            if playlists:
+                print(f"✅ Successfully refreshed {len(playlists)} playlists")
+                self.on_personal_playlists_ready(playlists)
+                self.status_label.setText(f"Found {len(playlists)} personal playlists")
+            else:
+                print("⚠️  No playlists returned")
+                # Check if we're still authenticated
+                if self.auth_manager.is_authenticated:
+                    # Try to refresh authentication status
+                    print("🔧 Attempting authentication refresh...")
+                    refresh_success = self.auth_manager.refresh_authentication_status()
+
+                    if refresh_success:
+                        # Retry after refresh
+                        playlists = self.auth_manager.get_user_playlists()
+                        if playlists:
+                            print(f"✅ Retry successful! Got {len(playlists)} playlists after refresh")
+                            self.on_personal_playlists_ready(playlists)
+                            self.status_label.setText(f"Found {len(playlists)} personal playlists")
+                        else:
+                            self.status_label.setText("No personal playlists found")
+                            QMessageBox.information(self, "No Playlists",
+                                                  "No personal playlists found. This could mean:\n"
+                                                  "• Your account has no created playlists\n"
+                                                  "• Authentication tokens have expired\n"
+                                                  "• Account permissions are restricted\n\n"
+                                                  "Try logging out and logging in again with fresh authentication.")
+                    else:
+                        # Authentication refresh failed
+                        self.status_label.setText("Authentication expired - please login again")
+                        QMessageBox.warning(self, "Authentication Expired",
+                                          "Your authentication has expired. Please logout and login again with a fresh cURL command from your browser.")
+                        # Update UI to show not authenticated
+                        self.on_auth_status_changed(False)
+                else:
+                    self.status_label.setText("Not authenticated - please login")
+                    QMessageBox.information(self, "Not Authenticated",
+                                          "You are no longer authenticated. Please login again.")
+
+        except Exception as e:
+            print(f"❌ Error refreshing playlists: {e}")
+            self.status_label.setText("Error refreshing playlists")
+            QMessageBox.critical(self, "Error",
+                               f"Failed to refresh playlists: {str(e)}\n\n"
+                               "This might be due to expired authentication. "
+                               "Try logging out and logging in again.")
+
+        finally:
+            self.progress_bar.setVisible(False)
+            self.refresh_playlists_button.setEnabled(True)
+
+    def force_auth_refresh(self):
+        """Force authentication token refresh"""
+        if not hasattr(self.auth_manager, 'force_token_refresh'):
+            QMessageBox.information(self, "Not Available",
+                                  "Token refresh is not available in this authentication mode.")
+            return
+
+        # Disable button during refresh
+        self.refresh_auth_button.setEnabled(False)
+        self.refresh_auth_button.setText("Refreshing...")
+
+        try:
+            print("🔄 Manual authentication refresh requested...")
+            refresh_success = self.auth_manager.force_token_refresh()
+
+            if refresh_success:
+                QMessageBox.information(self, "Success",
+                                      "Authentication tokens refreshed successfully!")
+                self.status_label.setText("Authentication refreshed - ready to fetch playlists")
+                # Automatically refresh playlists after successful auth refresh
+                self.refresh_personal_playlists()
+            else:
+                # Get authentication status info for more details
+                if hasattr(self.auth_manager, 'get_auth_status_info'):
+                    status = self.auth_manager.get_auth_status_info()
+                    retry_count = status.get('auth_retry_count', 0)
+                    max_retries = status.get('max_retries', 3)
+
+                    QMessageBox.warning(self, "Refresh Failed",
+                                      f"Authentication token refresh failed.\n\n"
+                                      f"Retry attempts: {retry_count}/{max_retries}\n\n"
+                                      "This usually means your browser session has expired. "
+                                      "Please logout and login again with a fresh cURL command.")
+                else:
+                    QMessageBox.warning(self, "Refresh Failed",
+                                      "Authentication token refresh failed. "
+                                      "Please logout and login again.")
+
+        except Exception as e:
+            print(f"❌ Error during manual auth refresh: {e}")
+            QMessageBox.critical(self, "Error",
+                               f"Error during authentication refresh: {str(e)}")
+
+        finally:
+            # Re-enable button
+            self.refresh_auth_button.setEnabled(True)
+            self.refresh_auth_button.setText("Refresh Auth")
 
     def on_personal_playlists_ready(self, playlists: List[Dict[str, Any]]):
         """Handle personal playlists fetch completion"""
