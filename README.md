@@ -1,24 +1,39 @@
 # PlaylistCat 🐱
 
-*Catalog and explore your YouTube Music playlists*
+*Catalog and manage your YouTube Music playlists*
 
-A desktop application that fetches YouTube Music playlists and displays them in a sortable table format using a modern PyQt6 GUI interface.
+A desktop application that fetches YouTube Music playlists and provides full playlist management capabilities using a modern PyQt6 GUI interface with seamless YouTube Music integration.
 
 ## Features
 
+### 🎵 **Playlist Management**
 - **Public Playlist Access**: Enter any YouTube Music playlist ID to fetch and display tracks
-- **Personal Playlist Access**: Login to browse and access your personal playlists
-- **Sortable Display**: Sort by Position, Artist, or Track Name
-- **Direct Links**: Open any track directly in YouTube Music
-- **Refresh Function**: Update playlists with fresh data
-- **Modern GUI**: Clean Qt-based interface with mouse interaction
-- **Authentication**: Optional login for personal playlist access
-- **Dual Mode**: Works for both authenticated and unauthenticated users
+- **Personal Playlist Access**: Full authentication system for your personal playlists
+- **Server-Side Modifications**: Actually remove tracks from your YouTube Music playlists
+- **Real-Time Sync**: Changes are synchronized with YouTube Music servers immediately
+
+### 🔐 **Authentication & Security**
+- **Browser Header Extraction**: Seamless login using your existing browser session
+- **Automatic Token Refresh**: 30-minute monitoring with transparent token renewal
+- **Multi-Method Fallback**: Robust authentication with multiple verification strategies
+- **Secure API Access**: SAPISIDHASH authorization for official YouTube Music API
+
+### 🖥️ **User Interface**
+- **Sortable Display**: Sort by Position, Artist, or Track Name with instant feedback
+- **Direct Links**: Open any track directly in YouTube Music with double-click
+- **Remove Functionality**: Delete tracks from playlists with confirmation dialogs
+- **Modern GUI**: Clean Qt-based interface with professional styling
+- **Status Tracking**: Real-time feedback for all operations and sync status
+
+### ⚙️ **Technical Features**
+- **Dual Mode Operation**: Works for both authenticated and unauthenticated users
+- **Automatic Refresh**: Background token maintenance without user interruption
+- **Error Recovery**: Comprehensive error handling with user-friendly messages
 - **Standalone Packaging**: Create executables that run without Python installation
 
 ## Quick Start (Standalone)
 
-**Download the latest release for your platform:**
+**Current Version: v0.4.0** | **Download the latest release for your platform:**
 
 [![Latest Release](https://img.shields.io/github/v/release/Makistos/playlistcat?style=for-the-badge)](https://github.com/Makistos/playlistcat/releases/latest)
 

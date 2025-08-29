@@ -1,5 +1,63 @@
 # GitHub Releases Guide 🚀
 
+## Latest Release: v0.4.0 (August 29, 2025)
+
+### 🎉 **Major Features Added:**
+
+**YouTube Music Authentication System**
+- Full YouTube Music integration with browser header extraction
+- SAPISIDHASH authorization header generation for secure API access
+- Multi-method authentication fallback system for reliability
+- Automatic OAuth detection prevention for seamless setup
+
+**Comprehensive Token Refresh System**
+- 30-minute automatic token monitoring with QTimer integration
+- Multi-method refresh strategies (headers, auth file, session)
+- Automatic retry logic with health checks
+- Background token maintenance without user interruption
+
+**Server-Side Playlist Management**
+- Real playlist modification using YouTube Music's official API
+- Remove tracks from actual playlists (not just local display)
+- Enhanced `remove_playlist_items` API integration with proper error handling
+- Smart fallback to local-only mode for public/read-only playlists
+
+**Enhanced User Interface**
+- 5-column table layout with styled remove buttons
+- Server vs local removal status differentiation
+- Comprehensive confirmation dialogs with track details
+- Automatic position renumbering after modifications
+- Clear visual feedback for all operations
+
+### 🔧 **Technical Improvements:**
+
+- **Authentication Architecture**: Robust auth manager with multiple verification methods
+- **API Integration**: Full ytmusicapi integration with proper setVideoId handling
+- **Error Handling**: Comprehensive error recovery and user guidance
+- **Status Tracking**: Real-time feedback for all playlist operations
+- **Data Synchronization**: Seamless sync between local display and server state
+
+### 📱 **User Experience Enhancements:**
+
+- **Seamless Authentication**: One-click login with browser header extraction
+- **Automatic Maintenance**: Token refresh happens transparently in background
+- **Real Playlist Control**: Actual modification of YouTube Music playlists
+- **Smart Error Recovery**: Graceful handling of network issues and auth problems
+- **Clear Status Messages**: Always know what's happening with your playlists
+
+### 🚀 **Migration from v0.3.0:**
+
+PlaylistCat v0.4.0 transforms from a read-only playlist viewer to a full playlist management tool:
+
+- **Before**: View playlist contents only
+- **After**: Full playlist management with server synchronization
+- **Authentication**: From anonymous access to full YouTube Music integration
+- **Modifications**: From display-only to real playlist editing capabilities
+
+This release represents a major evolution in PlaylistCat's capabilities, providing professional-grade playlist management tools with seamless YouTube Music integration.
+
+---
+
 This document explains how to create releases for PlaylistCat with cross-platform artifacts.
 
 ## Overview
