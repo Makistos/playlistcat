@@ -105,6 +105,7 @@ class PlaylistFetcher(QThread):
 
                 # Create YouTube Music URL
                 video_id = track.get('videoId', '')
+                set_video_id = track.get('setVideoId', '')
                 youtube_url = f"https://music.youtube.com/watch?v={video_id}" if video_id else ""
 
                 tracks.append({
@@ -112,7 +113,8 @@ class PlaylistFetcher(QThread):
                     'artist': artist_str,
                     'title': title,
                     'url': youtube_url,
-                    'video_id': video_id
+                    'video_id': video_id,
+                    'set_video_id': set_video_id
                 })
 
             self.progress_update.emit(f"Found {len(tracks)} tracks")
@@ -167,6 +169,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.current_sort_order = Qt.SortOrder.AscendingOrder
         self.fetcher_thread = None
         self.playlist_fetcher_thread = None
+        self.current_playlist_id = None  # Track current playlist for refresh functionality
 
         # Initialize authentication manager
         self.auth_manager = AuthManager()
@@ -230,7 +233,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             "• Login to access your personal playlists, or\n"
             "• Enter a YouTube Music playlist ID and click 'Fetch Playlist'\n"
             "• Click column headers to sort by Position, Artist, or Track Name\n"
-            "• Double-click any row to open the track in YouTube Music"
+            "• Double-click any row to open the track in YouTube Music\n"
+            "• Click the Remove button to delete a song from the playlist (removes from server if authenticated)"
         )
         instructions.setStyleSheet("color: gray; font-size: 10px;")
         layout.addWidget(instructions)
@@ -307,9 +311,9 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
     def create_table(self):
         """Create and configure the tracks table."""
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(5)  # Added Remove column
         self.table.setHorizontalHeaderLabels(
-            ["Position", "Artist", "Track Name", "YouTube Music Link"])
+            ["Position", "Artist", "Track Name", "YouTube Music Link", "Remove"])
 
         # Configure table appearance
         header = self.table.horizontalHeader()
@@ -322,6 +326,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
                 2, QHeaderView.ResizeMode.Stretch)           # Track Name
             header.setSectionResizeMode(
                 3, QHeaderView.ResizeMode.ResizeToContents)  # Link
+            header.setSectionResizeMode(
+                4, QHeaderView.ResizeMode.ResizeToContents)  # Remove
 
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(
@@ -557,6 +563,9 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             self.fetcher_thread.terminate()
             self.fetcher_thread.wait()
 
+        # Store current playlist ID for refresh functionality
+        self.current_playlist_id = playlist_id
+
         # Update UI for loading state
         self.fetch_button.setEnabled(False)
         self.refresh_button.setEnabled(False)
@@ -639,9 +648,31 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
             self.table.setItem(row, 3, link_item)
 
+            # Remove Button
+            remove_button = QPushButton("🗑️ Remove")
+            remove_button.setToolTip(f"Remove '{track['title']}' from the list")
+            remove_button.clicked.connect(lambda checked, r=row: self.remove_track(r))
+            remove_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #ff6b6b;
+                    color: white;
+                    border: none;
+                    padding: 4px 8px;
+                    border-radius: 3px;
+                    font-size: 10px;
+                }
+                QPushButton:hover {
+                    background-color: #ff5252;
+                }
+                QPushButton:pressed {
+                    background-color: #e53935;
+                }
+            """)
+            self.table.setCellWidget(row, 4, remove_button)
+
     def sort_table(self, logical_index: int):
         """Handle custom sorting for the first three columns."""
-        if logical_index > 2:  # Only sort first three columns
+        if logical_index > 2:  # Only sort first three columns (skip Link and Remove)
             return
 
         # Toggle sort order if clicking the same column
@@ -694,6 +725,95 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
                 "No URL Available",
                 f"No YouTube Music URL available for '{track_name}'"
             )
+
+    def remove_track(self, row: int):
+        """Remove a track from the playlist."""
+        if row < 0 or row >= len(self.tracks_data):
+            return
+
+        # Get track info for confirmation
+        track = self.tracks_data[row]
+        track_name = track.get('title', 'Unknown Track')
+        artist_name = track.get('artist', 'Unknown Artist')
+
+        # Confirm removal
+        reply = QMessageBox.question(
+            self,
+            "Remove Track",
+            f"Are you sure you want to remove this track from the playlist?\n\n"
+            f"🎵 {track_name}\n"
+            f"👤 {artist_name}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # Try to remove from server first
+            server_removal_success = False
+
+            # Check if we have the required IDs for server removal
+            video_id = track.get('video_id', '')
+            set_video_id = track.get('set_video_id', '')
+            playlist_id = getattr(self, 'current_playlist_id', '')
+            ytmusic = self.auth_manager.get_ytmusic() if self.auth_manager else None
+
+            if video_id and set_video_id and playlist_id and ytmusic:
+                try:
+                    self.status_label.setText("Removing track from server...")
+
+                    # Prepare the removal data
+                    videos_to_remove = [{
+                        'videoId': video_id,
+                        'setVideoId': set_video_id
+                    }]
+
+                    # Call the YouTube Music API to remove from server
+                    result = ytmusic.remove_playlist_items(playlist_id, videos_to_remove)
+
+                    if result:  # API returns success status
+                        server_removal_success = True
+                        self.status_label.setText("✅ Track removed from server successfully")
+                    else:
+                        self.status_label.setText("⚠️ Server removal may have failed")
+
+                except Exception as e:
+                    self.status_label.setText(f"❌ Server removal failed: {str(e)}")
+                    # Ask user if they want to continue with local removal
+                    reply = QMessageBox.question(
+                        self,
+                        "Server Removal Failed",
+                        f"Failed to remove track from server:\n{str(e)}\n\n"
+                        f"Do you want to remove it from the local display anyway?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No
+                    )
+                    if reply != QMessageBox.StandardButton.Yes:
+                        return
+
+            # Remove from local data (always do this, whether server removal succeeded or not)
+            self.tracks_data.pop(row)
+
+            # Update position numbers for remaining tracks
+            for i, track in enumerate(self.tracks_data):
+                track['position'] = i + 1
+
+            # Refresh the table display
+            self.populate_table()
+
+            # Update status message
+            if server_removal_success:
+                self.status_label.setText(
+                    f"✅ Removed '{track_name}' from playlist. {len(self.tracks_data)} tracks remaining.")
+            elif video_id and set_video_id and playlist_id:
+                self.status_label.setText(
+                    f"⚠️ '{track_name}' removed locally. Server sync may be needed. {len(self.tracks_data)} tracks remaining.")
+            else:
+                self.status_label.setText(
+                    f"📝 '{track_name}' removed from display (read-only mode). {len(self.tracks_data)} tracks remaining.")
+
+            # Enable refresh button if we have a current playlist
+            if hasattr(self, 'current_playlist_id') and self.current_playlist_id:
+                self.refresh_button.setEnabled(True)
 
 
 def main():
