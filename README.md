@@ -33,7 +33,7 @@ A desktop application that fetches YouTube Music playlists and provides full pla
 
 ## Quick Start (Standalone)
 
-**Current Version: v0.4.0** | **Download the latest release for your platform:**
+**Current Version: v0.4.1** | **Download the latest release for your platform:**
 
 [![Latest Release](https://img.shields.io/github/v/release/Makistos/playlistcat?style=for-the-badge)](https://github.com/Makistos/playlistcat/releases/latest)
 

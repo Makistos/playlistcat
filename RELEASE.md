@@ -1,6 +1,29 @@
 # GitHub Releases Guide 🚀
 
-## Latest Release: v0.4.0 (August 29, 2025)
+## Latest Release: v0.4.1 (August 31, 2025)
+
+### 🎯 **Position Preservation Enhancement:**
+
+**Original Track Order Preservation**
+- Position numbers now always reflect original YouTube Music playlist order
+- Sorting by Artist or Track Name preserves original position numbers
+- Enhanced user experience with accurate position tracking throughout all operations
+
+**Improved Position Handling**
+- Position gaps after track removal accurately show which tracks were deleted
+- No automatic renumbering - maintains YouTube Music sequence fidelity
+- Clear instructions explaining position behavior for user understanding
+
+**Technical Refinements**
+- Modified sort_table() method to maintain original position numbers during sorting
+- Updated remove_track() method to preserve YouTube Music sequence integrity
+- Enhanced workflow formatting and documentation clarity
+
+This patch release focuses on improving the position handling behavior to provide users with a more accurate representation of their original YouTube Music playlists, ensuring track positions remain meaningful regardless of sorting or modification operations.
+
+---
+
+## Previous Release: v0.4.0 (August 29, 2025)
 
 ### 🎉 **Major Features Added:**
 
