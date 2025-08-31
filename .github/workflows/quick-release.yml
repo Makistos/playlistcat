@@ -165,45 +165,45 @@ jobs:
         name: "PlaylistCat ${{ github.event.inputs.version }}"
         body: |
           # PlaylistCat ${{ github.event.inputs.version }}
-          
+
           ## 🎉 Major Features Added:
-          
+
           **YouTube Music Authentication System**
           - Full YouTube Music integration with browser header extraction
           - SAPISIDHASH authorization header generation for secure API access
           - Multi-method authentication fallback system for reliability
-          
+
           **Comprehensive Token Refresh System**
           - 30-minute automatic token monitoring with QTimer integration
           - Multi-method refresh strategies (headers, auth file, session)
           - Automatic retry logic with health checks
-          
+
           **Server-Side Playlist Management**
           - Real playlist modification using YouTube Music's official API
           - Remove tracks from actual playlists (not just local display)
           - Enhanced remove_playlist_items API integration with proper error handling
-          
+
           **Enhanced User Interface**
           - 5-column table layout with styled remove buttons
           - Server vs local removal status differentiation
           - Comprehensive confirmation dialogs with track details
-          
+
           ## 📦 Downloads
-          
+
           Choose your platform:
-          
+
           ### Windows
           - Download `playlistcat-windows-x64.zip`
           - Extract and run `run-gui.bat`
-          
+
           ### macOS
           - Download `playlistcat-macos-x64.tar.gz`
           - Extract and run `./run-gui.sh`
-          
+
           ### Linux
           - Download `playlistcat-linux-x64.tar.gz`
           - Extract and run `./run-gui.sh`
-          
+
           **No Python installation required!**
         files: |
           release-files/playlistcat-linux-x64.tar.gz
