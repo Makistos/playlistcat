@@ -233,6 +233,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             "• Login to access your personal playlists, or\n"
             "• Enter a YouTube Music playlist ID and click 'Fetch Playlist'\n"
             "• Click column headers to sort by Position, Artist, or Track Name\n"
+            "• Position numbers reflect original YouTube Music order (preserved during sorting)\n"
             "• Double-click any row to open the track in YouTube Music\n"
             "• Click the Remove button to delete a song from the playlist (removes from server if authenticated)"
         )
@@ -690,16 +691,17 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         # Sort the data
         reverse = self.current_sort_order == Qt.SortOrder.DescendingOrder
 
-        if logical_index == 0:  # Position
+        if logical_index == 0:  # Position - sort by original YouTube Music position
             self.tracks_data.sort(key=lambda x: int(
                 x['position']), reverse=reverse)
-        elif logical_index == 1:  # Artist
+        elif logical_index == 1:  # Artist - sort by artist but keep original positions
             self.tracks_data.sort(
                 key=lambda x: x['artist'].lower(), reverse=reverse)
-        elif logical_index == 2:  # Track Name
+        elif logical_index == 2:  # Track Name - sort by title but keep original positions
             self.tracks_data.sort(
                 key=lambda x: x['title'].lower(), reverse=reverse)
 
+        # Note: We DO NOT renumber positions here - they stay as original YouTube Music order
         # Repopulate table with sorted data
         self.populate_table()
 
@@ -793,9 +795,9 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             # Remove from local data (always do this, whether server removal succeeded or not)
             self.tracks_data.pop(row)
 
-            # Update position numbers for remaining tracks
-            for i, track in enumerate(self.tracks_data):
-                track['position'] = i + 1
+            # Note: We preserve original YouTube Music position numbers
+            # No renumbering - positions may have gaps after removal, which is correct
+            # This ensures position sorting always reflects original YouTube Music order
 
             # Refresh the table display
             self.populate_table()
