@@ -247,6 +247,7 @@ jobs:
     needs: build
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -263,6 +264,13 @@ jobs:
             test_gui: ./playlistcat
 
     steps:
+    - name: Install Qt runtime libraries (Linux)
+      if: runner.os == 'Linux'
+      # Present on any Linux desktop, but not on the bare runner image
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+
     - name: Download artifact
       uses: actions/download-artifact@v4
       with:
@@ -287,19 +295,21 @@ jobs:
         fi
 
         echo "Testing GUI version..."
-        # The GUI keeps running until the timeout kills it (exit 124);
-        # any other exit code means it crashed on startup.
+        # The GUI must still be running after 10 seconds; exiting earlier
+        # means it crashed on startup. (macOS has no `timeout` command.)
         if [ "$RUNNER_OS" = "Linux" ]; then
           export QT_QPA_PLATFORM=offscreen  # no display on Linux runners
         fi
-        set +e
-        timeout 10s ${{ matrix.test_gui }}
-        status=$?
-        set -e
-        if [ $status -ne 124 ]; then
-          echo "❌ GUI exited with status $status before the timeout"
+        ${{ matrix.test_gui }} &
+        pid=$!
+        sleep 10
+        if ! kill -0 $pid 2>/dev/null; then
+          set +e
+          wait $pid
+          echo "❌ GUI exited with status $? before 10 seconds"
           exit 1
         fi
+        kill $pid || true
         echo "GUI still running after 10s, startup OK"
 
         echo "✅ Artifact test completed successfully"
