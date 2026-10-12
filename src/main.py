@@ -64,6 +64,15 @@ except ImportError:
             return False
 
 
+def format_total_duration(seconds: int) -> str:
+    """Format a playing time as e.g. '3 h 52 min' or '45 min 10 s'."""
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours} h {minutes} min"
+    return f"{minutes} min {secs} s"
+
+
 class PlaylistFetcher(QThread):
     """Background thread for fetching playlist data from YouTube Music."""
 
@@ -121,7 +130,9 @@ class PlaylistFetcher(QThread):
                     'year': '',
                     'url': youtube_url,
                     'video_id': video_id,
-                    'set_video_id': set_video_id
+                    'set_video_id': set_video_id,
+                    'duration': track.get('duration') or '',
+                    'duration_seconds': int(track.get('duration_seconds') or 0),
                 })
 
             self.progress_update.emit(f"Found {len(tracks)} tracks")
@@ -273,12 +284,17 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.create_table()
         layout.addWidget(self.table)
 
+        # Playlist totals
+        self.summary_label = QLabel("")
+        self.summary_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(self.summary_label)
+
         # Instructions
         instructions = QLabel(
             "Instructions:\n"
             "• Login to access your personal playlists, or\n"
             "• Enter a YouTube Music playlist ID and click 'Fetch Playlist'\n"
-            "• Click column headers to sort by Position, Artist, Track Name, Album, or Year\n"
+            "• Click column headers to sort by Position, Artist, Track Name, Album, Year, or Length\n"
             "• Album and year show the original release, looked up from MusicBrainz in the background\n"
             "• Position numbers reflect original YouTube Music order (preserved during sorting)\n"
             "• Double-click any row to open the track in YouTube Music\n"
@@ -359,9 +375,9 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
     def create_table(self):
         """Create and configure the tracks table."""
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels(
-            ["Position", "Artist", "Track Name", "Album", "Year", "YouTube Music Link", "Remove"])
+            ["Position", "Artist", "Track Name", "Album", "Year", "Length", "YouTube Music Link", "Remove"])
 
         # Configure table appearance
         header = self.table.horizontalHeader()
@@ -377,9 +393,11 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             header.setSectionResizeMode(
                 4, QHeaderView.ResizeMode.ResizeToContents)  # Year
             header.setSectionResizeMode(
-                5, QHeaderView.ResizeMode.ResizeToContents)  # Link
+                5, QHeaderView.ResizeMode.ResizeToContents)  # Length
             header.setSectionResizeMode(
-                6, QHeaderView.ResizeMode.ResizeToContents)  # Remove
+                6, QHeaderView.ResizeMode.ResizeToContents)  # Link
+            header.setSectionResizeMode(
+                7, QHeaderView.ResizeMode.ResizeToContents)  # Remove
         self.table.setColumnWidth(3, 200)
 
         self.table.setAlternatingRowColors(True)
@@ -753,6 +771,12 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             # Year
             self.table.setItem(row, 4, self._year_item(track['year']))
 
+            # Length
+            length_item = QTableWidgetItem(track['duration'])
+            length_item.setData(Qt.ItemDataRole.UserRole, track['duration_seconds'])
+            length_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 5, length_item)
+
             # YouTube Music Link
             if track['url']:
                 link_item = QTableWidgetItem("🎵 Open")
@@ -764,7 +788,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
                 link_item.setData(Qt.ItemDataRole.UserRole, "")
                 link_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self.table.setItem(row, 5, link_item)
+            self.table.setItem(row, 6, link_item)
 
             # Remove Button
             remove_button = QPushButton("🗑️ Remove")
@@ -786,11 +810,25 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
                     background-color: #e53935;
                 }
             """)
-            self.table.setCellWidget(row, 6, remove_button)
+            self.table.setCellWidget(row, 7, remove_button)
+
+        self.update_summary()
+
+    def update_summary(self):
+        """Show the number of tracks and total playing time of the playlist."""
+        if not self.tracks_data:
+            self.summary_label.setText("")
+            return
+        total = sum(t['duration_seconds'] for t in self.tracks_data)
+        unknown = sum(1 for t in self.tracks_data if not t['duration_seconds'])
+        text = f"{len(self.tracks_data)} tracks · {format_total_duration(total)}"
+        if unknown:
+            text += f" ({unknown} without length)"
+        self.summary_label.setText(text)
 
     def sort_table(self, logical_index: int):
         """Handle custom sorting for the data columns."""
-        if logical_index > 4:  # Skip Link and Remove columns
+        if logical_index > 5:  # Skip Link and Remove columns
             return
 
         # Toggle sort order if clicking the same column
@@ -817,11 +855,12 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         elif logical_index == 2:  # Track Name - sort by title but keep original positions
             self.tracks_data.sort(
                 key=lambda x: x['title'].lower(), reverse=reverse)
-        elif logical_index in (3, 4):  # Album / Year - tracks without a value go last
-            field = 'album' if logical_index == 3 else 'year'
+        elif logical_index in (3, 4, 5):  # Album / Year / Length - tracks without a value go last
+            field = {3: 'album', 4: 'year', 5: 'duration_seconds'}[logical_index]
             with_value = [t for t in self.tracks_data if t[field]]
             without_value = [t for t in self.tracks_data if not t[field]]
-            with_value.sort(key=lambda x: x[field].lower(), reverse=reverse)
+            with_value.sort(key=lambda x: x[field].lower() if isinstance(x[field], str) else x[field],
+                            reverse=reverse)
             self.tracks_data[:] = with_value + without_value
 
         # Note: We DO NOT renumber positions here - they stay as original YouTube Music order
@@ -830,14 +869,14 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
         # Update status
         sort_order_text = "descending" if reverse else "ascending"
-        column_names = ["Position", "Artist", "Track Name", "Album", "Year"]
+        column_names = ["Position", "Artist", "Track Name", "Album", "Year", "Length"]
         self.status_label.setText(
             f"Sorted by {column_names[logical_index]} ({sort_order_text})")
 
     def open_track_url(self, item: QTableWidgetItem):
         """Open the YouTube Music URL for the selected track."""
         row = item.row()
-        url_item = self.table.item(row, 5)
+        url_item = self.table.item(row, 6)
 
         if url_item and url_item.data(Qt.ItemDataRole.UserRole):
             url = url_item.data(Qt.ItemDataRole.UserRole)
