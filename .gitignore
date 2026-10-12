@@ -186,3 +186,6 @@ appimagetool-*.AppImage
 
 # PyInstaller spec files (auto-generated)
 *.spec
+
+# Locally built distribution packages
+packages/
