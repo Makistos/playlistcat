@@ -24,6 +24,7 @@ mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 # Build with PyInstaller
 echo "🔨 Building with PyInstaller..."
 pyinstaller --onedir --windowed --name playlistcat \
+    --paths src \
     --distpath AppDir/usr/bin \
     --add-data "README.md:." \
     --add-data "src/utils.py:." \

@@ -38,6 +38,7 @@ rm -rf build dist
 # Build GUI version
 echo "🖥️  Building GUI version..."
 pyinstaller --onefile --windowed --name playlistcat \
+    --paths src \
     --add-data "README.md:." \
     --add-data "src/utils.py:." \
     --add-data "src/auth.py:." \

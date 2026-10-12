@@ -252,15 +252,15 @@ jobs:
           - os: ubuntu-latest
             artifact: playlistcat-linux-x64
             extract_cmd: tar -xzf
-            test_gui: ./playlistcat --version
+            test_gui: ./playlistcat
           - os: windows-latest
             artifact: playlistcat-windows-x64
             extract_cmd: 7z x
-            test_gui: .\playlistcat.exe --version
+            test_gui: ./playlistcat.exe
           - os: macos-latest
             artifact: playlistcat-macos-x64
             extract_cmd: tar -xzf
-            test_gui: ./playlistcat --version
+            test_gui: ./playlistcat
 
     steps:
     - name: Download artifact
@@ -287,6 +287,19 @@ jobs:
         fi
 
         echo "Testing GUI version..."
-        timeout 10s ${{ matrix.test_gui }} || echo "GUI test completed (timeout expected)"
+        # The GUI keeps running until the timeout kills it (exit 124);
+        # any other exit code means it crashed on startup.
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          export QT_QPA_PLATFORM=offscreen  # no display on Linux runners
+        fi
+        set +e
+        timeout 10s ${{ matrix.test_gui }}
+        status=$?
+        set -e
+        if [ $status -ne 124 ]; then
+          echo "❌ GUI exited with status $status before the timeout"
+          exit 1
+        fi
+        echo "GUI still running after 10s, startup OK"
 
         echo "✅ Artifact test completed successfully"
