@@ -54,15 +54,34 @@ To access your personal playlists, you need to authenticate once:
 - Click the "Login" button in the Authentication section
 - This opens the authentication setup dialog
 
-### Step 3: Extract Browser Headers
-1. **Open YouTube Music** in your web browser
-2. **Login** to your YouTube Music account
-3. **Open Developer Tools** (F12 or right-click → Inspect)
-4. **Go to Network tab**
-5. **Refresh the page** (F5)
-6. **Find a request** to `music.youtube.com`
-7. **Right-click** on the request
-8. **Copy → Copy as cURL**
+### Step 3: Copy a Request as cURL
+The same instructions are available in the app via the **Help** button in the login dialog.
+
+#### Option A: Web browser (Chrome, Chromium, Edge, Firefox)
+1. **Open** https://music.youtube.com and make sure you are logged in
+2. **Open Developer Tools** (F12 or Ctrl+Shift+I)
+3. **Go to the Network tab** and type `browse` in the filter box
+4. **Click Library** or one of your playlists so new requests appear
+5. **Right-click** a `browse?prettyPrint=false` request
+6. **Copy as cURL**:
+   - Chrome/Edge: **Copy → Copy as cURL (bash)**
+   - Firefox: **Copy Value → Copy as cURL**
+
+#### Option B: YouTube Music PWA (installed app)
+The installed YouTube Music app is a Chrome/Edge window with the same Developer Tools.
+1. **Open the YouTube Music app** and make sure you are logged in
+2. **Press Ctrl+Shift+I** with the app window focused. If nothing happens, open the **⋮** menu in the app's title bar and choose **More tools → Developer tools**
+3. **Go to the Network tab** and type `browse` in the filter box
+4. **Click Library** or one of your playlists in the app
+5. **Right-click** a `browse?prettyPrint=false` request → **Copy → Copy as cURL (bash)**
+
+Tip: the PWA shares cookies with its browser profile, so you can also open music.youtube.com in a normal tab of the same profile and follow Option A.
+
+**Notes:**
+- Use the bash/POSIX variant of "Copy as cURL", not the Windows (cmd/PowerShell) one
+- Newer Chrome versions put cookies in a `-b '...'` argument instead of a `Cookie:` header; both are supported
+- The login stays valid as long as that browser session does. Logging out of YouTube/Google in that browser or clearing its cookies ends it
+- The copied command contains your session cookies. Don't share it with anyone
 
 ### Step 4: Complete Setup
 1. **Paste the cURL command** into the text area in PlaylistCat

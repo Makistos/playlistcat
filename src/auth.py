@@ -13,8 +13,58 @@ import time
 import requests
 from typing import Optional, Dict, List, Any
 from PyQt6.QtCore import QObject, pyqtSignal, QThread, QTimer
-from PyQt6.QtWidgets import QMessageBox, QInputDialog, QDialog, QVBoxLayout, QPushButton, QLabel, QTextEdit
+from PyQt6.QtWidgets import QMessageBox, QInputDialog, QDialog, QVBoxLayout, QPushButton, QLabel, QTextEdit, QTextBrowser
 from ytmusicapi import YTMusic
+
+
+LOGIN_HELP_HTML = """
+<h2>How to log in to YouTube Music</h2>
+<p>PlaylistCat logs in using your existing YouTube Music session. You copy one
+network request from YouTube Music as a <b>cURL command</b> and paste it into
+the login dialog. Your password is never needed.</p>
+
+<h3>Option A: Web browser (Chrome, Chromium, Edge, Firefox)</h3>
+<ol>
+<li>Open <b>https://music.youtube.com</b> in your browser and make sure you are logged in.</li>
+<li>Open Developer Tools: press <b>F12</b> or <b>Ctrl+Shift+I</b>.</li>
+<li>Select the <b>Network</b> tab.</li>
+<li>Type <b>browse</b> in the filter box.</li>
+<li>Click something in YouTube Music, e.g. <b>Library</b> or one of your playlists,
+    so that new requests appear.</li>
+<li>Right-click a <b>browse?prettyPrint=false</b> request and choose<br>
+    Chrome/Edge: <b>Copy &rarr; Copy as cURL (bash)</b><br>
+    Firefox: <b>Copy Value &rarr; Copy as cURL</b></li>
+<li>Paste the command into the PlaylistCat login dialog and click <b>Setup Authentication</b>.</li>
+</ol>
+
+<h3>Option B: YouTube Music PWA (installed app)</h3>
+<p>The installed YouTube Music app is a Chrome/Edge window, so it has the same Developer Tools.</p>
+<ol>
+<li>Open the YouTube Music app and make sure you are logged in.</li>
+<li>With the app window focused, press <b>Ctrl+Shift+I</b>.<br>
+    If nothing happens, open the <b>&#8942;</b> menu in the app's title bar and choose
+    <b>More tools &rarr; Developer tools</b>.</li>
+<li>Select the <b>Network</b> tab and type <b>browse</b> in the filter box.</li>
+<li>Click <b>Library</b> or one of your playlists in the app.</li>
+<li>Right-click a <b>browse?prettyPrint=false</b> request and choose
+    <b>Copy &rarr; Copy as cURL (bash)</b>.</li>
+<li>Paste the command into the PlaylistCat login dialog and click <b>Setup Authentication</b>.</li>
+</ol>
+<p><i>Tip:</i> the PWA shares cookies with its browser profile, so you can also open
+music.youtube.com in a normal tab of the same profile and follow Option A.</p>
+
+<h3>Good to know</h3>
+<ul>
+<li>Use the <b>bash</b>/<b>POSIX</b> variant of "Copy as cURL", not the Windows (cmd/PowerShell) one.</li>
+<li>The login stays valid as long as that browser session does. Logging out of YouTube
+    or Google in that browser, or clearing its cookies, ends it, and PlaylistCat will ask you to log in again.</li>
+<li>The copied command contains your session cookies, which give access to your Google
+    account. Do not share it with anyone. PlaylistCat stores it locally in
+    <b>~/.playlistcat_auth.json</b>, and <b>Logout</b> deletes it.</li>
+<li>If you have several Google accounts signed in, PlaylistCat uses the one that was
+    active in YouTube Music when you copied the request.</li>
+</ul>
+"""
 
 
 class AuthSetupDialog(QDialog):
@@ -38,17 +88,14 @@ class AuthSetupDialog(QDialog):
 
 <h4>Steps:</h4>
 <ol>
-<li>Open YouTube Music in your browser and log in</li>
-<li>Open Developer Tools (F12)</li>
-<li>Go to Network tab</li>
-<li>Refresh the page or navigate to a playlist</li>
-<li>Look for requests to <b>music.youtube.com</b></li>
-<li>Find a request with <b>Cookie</b> headers (like /youtubei/v1/ or /generate_204)</li>
-<li>Right-click → Copy → Copy as cURL</li>
+<li>Open YouTube Music (browser or installed app) and log in</li>
+<li>Open Developer Tools (F12 or Ctrl+Shift+I) and go to the Network tab</li>
+<li>Filter for <b>browse</b> and click Library or a playlist</li>
+<li>Right-click a <b>browse</b> request → Copy → Copy as cURL (bash)</li>
 <li>Paste the cURL command below</li>
 </ol>
 
-<p><strong>Note:</strong> The cURL command should include Cookie headers with authentication data.</p>
+<p>Click <b>Help</b> for detailed instructions for browsers and the YouTube Music app (PWA).</p>
         """)
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
@@ -65,11 +112,32 @@ class AuthSetupDialog(QDialog):
         self.setup_button.clicked.connect(self.setup_auth)
         button_layout.addWidget(self.setup_button)
 
+        self.help_button = QPushButton("Help")
+        self.help_button.clicked.connect(self.show_help)
+        button_layout.addWidget(self.help_button)
+
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_button)
 
         layout.addLayout(button_layout)
+
+    def show_help(self):
+        """Show detailed login instructions for browsers and the PWA"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Login Help")
+        dialog.resize(650, 600)
+
+        help_layout = QVBoxLayout(dialog)
+        help_text = QTextBrowser()
+        help_text.setHtml(LOGIN_HELP_HTML)
+        help_layout.addWidget(help_text)
+
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        help_layout.addWidget(close_button)
+
+        dialog.exec()
 
     def setup_auth(self):
         curl_text = self.curl_input.toPlainText().strip()
@@ -130,7 +198,8 @@ class AuthSetupDialog(QDialog):
         # Split into tokens while respecting quotes
         tokens = self._tokenize_curl_command(cleaned_text)
 
-        headers = {}
+        # Browsers send lowercase header names; lookups elsewhere use canonical case
+        headers = requests.structures.CaseInsensitiveDict()
         i = 0
 
         while i < len(tokens):
@@ -151,6 +220,10 @@ class AuthSetupDialog(QDialog):
                     headers[key.strip()] = value.strip()
 
                 i += 2  # Skip both the flag and the value
+            # Newer Chrome versions emit cookies with -b instead of a Cookie header
+            elif token in ['-b', '--cookie'] and i + 1 < len(tokens):
+                headers['Cookie'] = tokens[i + 1].strip("'\"")
+                i += 2
             else:
                 i += 1
 
@@ -277,6 +350,18 @@ class AuthenticationManager(QObject):
         except Exception as e:
             print(f"Failed to initialize YTMusic: {e}")
             self.ytmusic = None
+
+    def _verify_logged_in(self, ytmusic: YTMusic):
+        """Raise if YouTube Music treats the given credentials as logged out.
+
+        Expired cookies don't cause API errors - YouTube just answers as an
+        anonymous user, so library calls silently return empty results.
+        """
+        response = ytmusic._send_request('browse', {'browseId': 'FEmusic_liked_playlists'})
+        for service in response.get('responseContext', {}).get('serviceTrackingParams', []):
+            for param in service.get('params', []):
+                if param.get('key') == 'logged_in' and param.get('value') != '1':
+                    raise Exception("Authentication expired: YouTube Music treats this session as logged out")
 
     def setup_authentication(self, parent_widget=None) -> bool:
         """Show authentication setup dialog and configure authentication"""
@@ -420,6 +505,7 @@ class AuthenticationManager(QObject):
                 try:
                     print("🔧 Trying auth file + session...")
                     test_ytmusic = YTMusic(auth=self.auth_file_path, requests_session=session)
+                    self._verify_logged_in(test_ytmusic)
                     # Test library access
                     playlists = test_ytmusic.get_library_playlists(limit=1)
                     print(f"✅ Auth file + session works! Found {len(playlists)} playlists")
@@ -433,6 +519,7 @@ class AuthenticationManager(QObject):
                 try:
                     print("🔧 Trying auth file only...")
                     test_ytmusic = YTMusic(self.auth_file_path)
+                    self._verify_logged_in(test_ytmusic)
                     # Test library access
                     playlists = test_ytmusic.get_library_playlists(limit=1)
                     print(f"✅ Auth file works! Found {len(playlists)} playlists")
@@ -446,6 +533,7 @@ class AuthenticationManager(QObject):
                 try:
                     print("🔧 Trying session only...")
                     test_ytmusic = YTMusic(requests_session=session)
+                    self._verify_logged_in(test_ytmusic)
                     print("✅ Session-only YTMusic created (library access may be limited)")
                     auth_method = "session_only"
                     playlists = []  # Can't test library access with session-only
@@ -662,7 +750,7 @@ class AuthenticationManager(QObject):
         try:
             # Test authentication with the saved file
             test_ytmusic = YTMusic(self.auth_file_path)
-            test_ytmusic.get_library_playlists(limit=1)  # Test call
+            self._verify_logged_in(test_ytmusic)
 
             # If we get here, authentication worked
             self.ytmusic = test_ytmusic
