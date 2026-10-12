@@ -191,3 +191,44 @@ class MusicBrainzClient:
         studio = next((e for e in earliest if e[1] == 0), None)
         chosen = studio if studio and int(studio[0]) - int(first[0]) <= STUDIO_ALBUM_MAX_DELAY else first
         return {"album": chosen[2], "year": chosen[0]}
+
+
+class AlbumOverrides:
+    """Album/year values corrected by the user, stored on disk.
+
+    Keyed like the MusicBrainz cache, so a correction applies to the same song
+    in every playlist and is never replaced by a lookup result.
+    """
+
+    FIELDS = ("album", "year")
+
+    def __init__(self, path: Optional[str] = None):
+        self.path = path or os.path.join(
+            os.path.expanduser("~"), ".playlistcat_album_overrides.json")
+        self.overrides: Dict[str, Dict[str, str]] = {}
+        try:
+            with open(self.path) as f:
+                self.overrides = json.load(f)
+        except (OSError, ValueError):
+            pass
+
+    def get(self, key: str) -> Dict[str, str]:
+        return self.overrides.get(key, {})
+
+    def set(self, key: str, field: str, value: str):
+        self.overrides.setdefault(key, {})[field] = value
+        self._save()
+
+    def clear(self, key: str, field: str):
+        fields = self.overrides.get(key, {})
+        fields.pop(field, None)
+        if not fields:
+            self.overrides.pop(key, None)
+        self._save()
+
+    def _save(self):
+        try:
+            with open(self.path, "w") as f:
+                json.dump(self.overrides, f, indent=1)
+        except OSError as e:
+            print(f"Failed to save album corrections: {e}")

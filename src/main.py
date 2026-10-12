@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
     QPushButton, QLineEdit, QLabel, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QProgressBar, QFrame, QComboBox, QGroupBox
+    QHeaderView, QMessageBox, QProgressBar, QFrame, QComboBox, QGroupBox, QMenu
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QIcon
@@ -21,7 +21,7 @@ from ytmusicapi import YTMusic
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from musicbrainz import MusicBrainzClient, MusicBrainzError
+from musicbrainz import MusicBrainzClient, MusicBrainzError, AlbumOverrides
 
 try:
     from utils import extract_playlist_id, validate_playlist_id
@@ -226,6 +226,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.playlist_fetcher_thread = None
         self.album_info_thread = None
         self.musicbrainz = MusicBrainzClient()
+        self.album_overrides = AlbumOverrides()
         self.current_playlist_id = None  # Track current playlist for refresh functionality
 
         # Initialize authentication manager
@@ -296,8 +297,9 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             "• Enter a YouTube Music playlist ID and click 'Fetch Playlist'\n"
             "• Click column headers to sort by Position, Artist, Track Name, Album, Year, or Length\n"
             "• Album and year show the original release, looked up from MusicBrainz in the background\n"
+            "• Double-click (or press F2 on) an album or year to correct it; right-click an edited value to revert it\n"
             "• Position numbers reflect original YouTube Music order (preserved during sorting)\n"
-            "• Double-click any row to open the track in YouTube Music\n"
+            "• Double-click any other column to open the track in YouTube Music\n"
             "• Click the Remove button to delete a song from the playlist (removes from server if authenticated)"
         )
         instructions.setStyleSheet("color: gray; font-size: 10px;")
@@ -408,6 +410,13 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
         # Connect double-click to open URL
         self.table.itemDoubleClicked.connect(self.open_track_url)
+
+        # Album and year can be corrected by the user (other cells are read-only)
+        self.table.setEditTriggers(
+            QTableWidget.EditTrigger.DoubleClicked | QTableWidget.EditTrigger.EditKeyPressed)
+        self.table.itemChanged.connect(self.on_item_edited)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_table_context_menu)
 
         # Connect header clicks for custom sorting
         if header:
@@ -665,9 +674,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.tracks_data = tracks
         for track in self.tracks_data:
             track['mb_key'] = MusicBrainzClient.cache_key(track['primary_artist'], track['title'])
-            info = self.musicbrainz.cache.get(track['mb_key']) or {}
-            track['album'] = info.get('album', '')
-            track['year'] = info.get('year', '')
+            self._apply_album_info(track)
         self.populate_table()
 
         # Update UI
@@ -681,7 +688,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         """Look up original albums for tracks not already in the MusicBrainz cache."""
         lookups = {}
         for t in self.tracks_data:
-            if t['primary_artist'] and t['mb_key'] not in self.musicbrainz.cache:
+            fully_corrected = all(f in self.album_overrides.get(t['mb_key']) for f in AlbumOverrides.FIELDS)
+            if t['primary_artist'] and t['mb_key'] not in self.musicbrainz.cache and not fully_corrected:
                 lookups.setdefault(t['mb_key'], (t['mb_key'], t['primary_artist'], t['title']))
         if not lookups:
             return
@@ -705,12 +713,64 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
     def on_album_info_ready(self, key: str, album: str, year: str):
         """Fill in album and year for every track matching the lookup."""
+        self._refresh_album_info(key)
+
+    def _apply_album_info(self, track: Dict[str, Any]):
+        """Set a track's album and year from user corrections or the MusicBrainz cache."""
+        info = self.musicbrainz.cache.get(track['mb_key']) or {}
+        corrected = self.album_overrides.get(track['mb_key'])
+        for field in AlbumOverrides.FIELDS:
+            track[field] = corrected.get(field, info.get(field, ''))
+            track[f'{field}_edited'] = field in corrected
+
+    def _refresh_album_info(self, key: str):
+        """Update album and year cells of every track with the given lookup key."""
+        self.table.blockSignals(True)
         for row, track in enumerate(self.tracks_data):
             if track['mb_key'] == key:
-                track['album'] = album
-                track['year'] = year
-                self.table.setItem(row, 3, self._album_item(album))
-                self.table.setItem(row, 4, self._year_item(year))
+                self._apply_album_info(track)
+                self.table.setItem(row, 3, self._album_item(track))
+                self.table.setItem(row, 4, self._year_item(track))
+        self.table.blockSignals(False)
+
+    def on_item_edited(self, item: QTableWidgetItem):
+        """Save a user correction to an album or year cell."""
+        column = item.column()
+        if column not in (3, 4) or item.row() >= len(self.tracks_data):
+            return
+        track = self.tracks_data[item.row()]
+        field = 'album' if column == 3 else 'year'
+        value = item.text().strip()
+
+        if field == 'year' and value and not (value.isdigit() and len(value) == 4):
+            QMessageBox.warning(self, "Invalid Year", f"'{value}' is not a valid year. Use four digits, e.g. 1987.")
+            self._refresh_album_info(track['mb_key'])
+            return
+
+        if value != track[field]:
+            self.album_overrides.set(track['mb_key'], field, value)
+            self.status_label.setText(f"Saved {field} for '{track['title']}'")
+        self._refresh_album_info(track['mb_key'])
+
+    def show_table_context_menu(self, pos):
+        """Offer to revert a user-corrected album or year."""
+        item = self.table.itemAt(pos)
+        if not item or item.column() not in (3, 4) or item.row() >= len(self.tracks_data):
+            return
+        track = self.tracks_data[item.row()]
+        field = 'album' if item.column() == 3 else 'year'
+
+        menu = QMenu(self)
+        edit_action = menu.addAction(f"Edit {field}")
+        revert_action = menu.addAction("Revert to MusicBrainz value")
+        revert_action.setEnabled(track[f'{field}_edited'])
+        chosen = menu.exec(self.table.viewport().mapToGlobal(pos))
+        if chosen == edit_action:
+            self.table.editItem(item)
+        elif chosen == revert_action:
+            self.album_overrides.clear(track['mb_key'], field)
+            self._refresh_album_info(track['mb_key'])
+            self.status_label.setText(f"Reverted {field} for '{track['title']}'")
 
     def on_album_info_progress(self, done: int, total: int):
         if done < total:
@@ -718,15 +778,29 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         else:
             self.status_label.setText(f"Loaded {len(self.tracks_data)} tracks, album lookup complete")
 
-    def _album_item(self, album: str) -> QTableWidgetItem:
-        item = QTableWidgetItem(album)
-        item.setData(Qt.ItemDataRole.UserRole, album)
+    def _album_item(self, track: Dict[str, Any]) -> QTableWidgetItem:
+        return self._editable_item(track, 'album')
+
+    def _year_item(self, track: Dict[str, Any]) -> QTableWidgetItem:
+        item = self._editable_item(track, 'year')
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         return item
 
-    def _year_item(self, year: str) -> QTableWidgetItem:
-        item = QTableWidgetItem(year)
-        item.setData(Qt.ItemDataRole.UserRole, year)
-        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+    def _editable_item(self, track: Dict[str, Any], field: str) -> QTableWidgetItem:
+        item = QTableWidgetItem(track[field])
+        item.setData(Qt.ItemDataRole.UserRole, track[field])
+        if track[f'{field}_edited']:
+            font = item.font()
+            font.setItalic(True)
+            item.setFont(font)
+            item.setToolTip("Corrected by you. Right-click to revert to the MusicBrainz value.")
+        else:
+            item.setToolTip("Double-click or press F2 to correct")
+        return item
+
+    @staticmethod
+    def _read_only(item: QTableWidgetItem) -> QTableWidgetItem:
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         return item
 
     def on_error(self, error_message: str):
@@ -746,6 +820,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
     def populate_table(self):
         """Populate the table with track data."""
+        self.table.blockSignals(True)  # only user edits should trigger itemChanged
         self.table.setRowCount(len(self.tracks_data))
 
         for row, track in enumerate(self.tracks_data):
@@ -753,29 +828,29 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             pos_item = QTableWidgetItem(str(track['position']))
             pos_item.setData(Qt.ItemDataRole.UserRole, track['position'])
             pos_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 0, pos_item)
+            self.table.setItem(row, 0, self._read_only(pos_item))
 
             # Artist
             artist_item = QTableWidgetItem(track['artist'])
             artist_item.setData(Qt.ItemDataRole.UserRole, track['artist'])
-            self.table.setItem(row, 1, artist_item)
+            self.table.setItem(row, 1, self._read_only(artist_item))
 
             # Track Name
             title_item = QTableWidgetItem(track['title'])
             title_item.setData(Qt.ItemDataRole.UserRole, track['title'])
-            self.table.setItem(row, 2, title_item)
+            self.table.setItem(row, 2, self._read_only(title_item))
 
             # Album
-            self.table.setItem(row, 3, self._album_item(track['album']))
+            self.table.setItem(row, 3, self._album_item(track))
 
             # Year
-            self.table.setItem(row, 4, self._year_item(track['year']))
+            self.table.setItem(row, 4, self._year_item(track))
 
             # Length
             length_item = QTableWidgetItem(track['duration'])
             length_item.setData(Qt.ItemDataRole.UserRole, track['duration_seconds'])
             length_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 5, length_item)
+            self.table.setItem(row, 5, self._read_only(length_item))
 
             # YouTube Music Link
             if track['url']:
@@ -788,7 +863,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
                 link_item.setData(Qt.ItemDataRole.UserRole, "")
                 link_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self.table.setItem(row, 6, link_item)
+            self.table.setItem(row, 6, self._read_only(link_item))
 
             # Remove Button
             remove_button = QPushButton("🗑️ Remove")
@@ -812,6 +887,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             """)
             self.table.setCellWidget(row, 7, remove_button)
 
+        self.table.blockSignals(False)
         self.update_summary()
 
     def update_summary(self):
@@ -875,6 +951,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
     def open_track_url(self, item: QTableWidgetItem):
         """Open the YouTube Music URL for the selected track."""
+        if item.column() in (3, 4):  # double-click edits album and year instead
+            return
         row = item.row()
         url_item = self.table.item(row, 6)
 
