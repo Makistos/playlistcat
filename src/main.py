@@ -5,6 +5,7 @@ A Qt application to fetch and display YouTube Music playlists with sorting capab
 """
 
 import sys
+import threading
 import webbrowser
 import os
 from typing import List, Dict, Any, Optional
@@ -19,6 +20,8 @@ from ytmusicapi import YTMusic
 
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from musicbrainz import MusicBrainzClient, MusicBrainzError
 
 try:
     from utils import extract_playlist_id, validate_playlist_id
@@ -112,6 +115,10 @@ class PlaylistFetcher(QThread):
                     'position': i,
                     'artist': artist_str,
                     'title': title,
+                    # First artist only, for the MusicBrainz lookup
+                    'primary_artist': artists[0] if artists else '',
+                    'album': '',
+                    'year': '',
                     'url': youtube_url,
                     'video_id': video_id,
                     'set_video_id': set_video_id
@@ -122,6 +129,43 @@ class PlaylistFetcher(QThread):
 
         except Exception as e:
             self.error_occurred.emit(f"Error fetching playlist: {str(e)}")
+
+
+class AlbumInfoFetcher(QThread):
+    """Background thread for looking up original albums from MusicBrainz.
+
+    MusicBrainz allows one request per second, so results are reported one
+    track at a time and the table is filled in progressively.
+    """
+
+    info_ready = pyqtSignal(str, str, str)  # cache key, album, year
+    progress_update = pyqtSignal(int, int)  # done, total
+
+    def __init__(self, client: MusicBrainzClient, lookups: List[tuple]):
+        super().__init__()
+        self.client = client
+        self.lookups = lookups  # (cache key, artist, title)
+        self.stop_event = threading.Event()
+
+    def stop(self):
+        self.stop_event.set()
+
+    def run(self):
+        try:
+            for done, (key, artist, title) in enumerate(self.lookups, 1):
+                if self.stop_event.is_set():
+                    return
+                try:
+                    info = self.client.lookup(artist, title, self.stop_event) or {}
+                    self.info_ready.emit(key, info.get('album', ''), info.get('year', ''))
+                except MusicBrainzError as e:
+                    # Not cached, so it is retried the next time the playlist is loaded
+                    print(f"MusicBrainz lookup failed for {artist} - {title}: {e}")
+                self.progress_update.emit(done, len(self.lookups))
+                if done % 10 == 0:
+                    self.client.save_cache()
+        finally:
+            self.client.save_cache()
 
 
 class PersonalPlaylistFetcher(QThread):
@@ -169,6 +213,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.current_sort_order = Qt.SortOrder.AscendingOrder
         self.fetcher_thread = None
         self.playlist_fetcher_thread = None
+        self.album_info_thread = None
+        self.musicbrainz = MusicBrainzClient()
         self.current_playlist_id = None  # Track current playlist for refresh functionality
 
         # Initialize authentication manager
@@ -232,7 +278,8 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             "Instructions:\n"
             "• Login to access your personal playlists, or\n"
             "• Enter a YouTube Music playlist ID and click 'Fetch Playlist'\n"
-            "• Click column headers to sort by Position, Artist, or Track Name\n"
+            "• Click column headers to sort by Position, Artist, Track Name, Album, or Year\n"
+            "• Album and year show the original release, looked up from MusicBrainz in the background\n"
             "• Position numbers reflect original YouTube Music order (preserved during sorting)\n"
             "• Double-click any row to open the track in YouTube Music\n"
             "• Click the Remove button to delete a song from the playlist (removes from server if authenticated)"
@@ -312,9 +359,9 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
     def create_table(self):
         """Create and configure the tracks table."""
         self.table = QTableWidget()
-        self.table.setColumnCount(5)  # Added Remove column
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
-            ["Position", "Artist", "Track Name", "YouTube Music Link", "Remove"])
+            ["Position", "Artist", "Track Name", "Album", "Year", "YouTube Music Link", "Remove"])
 
         # Configure table appearance
         header = self.table.horizontalHeader()
@@ -326,9 +373,14 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             header.setSectionResizeMode(
                 2, QHeaderView.ResizeMode.Stretch)           # Track Name
             header.setSectionResizeMode(
-                3, QHeaderView.ResizeMode.ResizeToContents)  # Link
+                3, QHeaderView.ResizeMode.Interactive)       # Album
             header.setSectionResizeMode(
-                4, QHeaderView.ResizeMode.ResizeToContents)  # Remove
+                4, QHeaderView.ResizeMode.ResizeToContents)  # Year
+            header.setSectionResizeMode(
+                5, QHeaderView.ResizeMode.ResizeToContents)  # Link
+            header.setSectionResizeMode(
+                6, QHeaderView.ResizeMode.ResizeToContents)  # Remove
+        self.table.setColumnWidth(3, 200)
 
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(
@@ -563,6 +615,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         if self.fetcher_thread and self.fetcher_thread.isRunning():
             self.fetcher_thread.terminate()
             self.fetcher_thread.wait()
+        self.stop_album_info_fetch()
 
         # Store current playlist ID for refresh functionality
         self.current_playlist_id = playlist_id
@@ -592,6 +645,11 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
     def on_data_ready(self, tracks: List[Dict[str, Any]]):
         """Handle successful data fetch."""
         self.tracks_data = tracks
+        for track in self.tracks_data:
+            track['mb_key'] = MusicBrainzClient.cache_key(track['primary_artist'], track['title'])
+            info = self.musicbrainz.cache.get(track['mb_key']) or {}
+            track['album'] = info.get('album', '')
+            track['year'] = info.get('year', '')
         self.populate_table()
 
         # Update UI
@@ -599,6 +657,59 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         self.refresh_button.setEnabled(True)
         self.progress_bar.setVisible(False)
         self.status_label.setText(f"Loaded {len(tracks)} tracks")
+        self.start_album_info_fetch()
+
+    def start_album_info_fetch(self):
+        """Look up original albums for tracks not already in the MusicBrainz cache."""
+        lookups = {}
+        for t in self.tracks_data:
+            if t['primary_artist'] and t['mb_key'] not in self.musicbrainz.cache:
+                lookups.setdefault(t['mb_key'], (t['mb_key'], t['primary_artist'], t['title']))
+        if not lookups:
+            return
+
+        self.album_info_thread = AlbumInfoFetcher(self.musicbrainz, list(lookups.values()))
+        self.album_info_thread.info_ready.connect(self.on_album_info_ready)
+        self.album_info_thread.progress_update.connect(self.on_album_info_progress)
+        self.album_info_thread.start()
+
+    def stop_album_info_fetch(self):
+        """Stop a running album lookup, e.g. when another playlist is loaded."""
+        if self.album_info_thread and self.album_info_thread.isRunning():
+            self.album_info_thread.info_ready.disconnect(self.on_album_info_ready)
+            self.album_info_thread.progress_update.disconnect(self.on_album_info_progress)
+            self.album_info_thread.stop()
+            self.album_info_thread.wait()
+
+    def closeEvent(self, a0):
+        self.stop_album_info_fetch()
+        super().closeEvent(a0)
+
+    def on_album_info_ready(self, key: str, album: str, year: str):
+        """Fill in album and year for every track matching the lookup."""
+        for row, track in enumerate(self.tracks_data):
+            if track['mb_key'] == key:
+                track['album'] = album
+                track['year'] = year
+                self.table.setItem(row, 3, self._album_item(album))
+                self.table.setItem(row, 4, self._year_item(year))
+
+    def on_album_info_progress(self, done: int, total: int):
+        if done < total:
+            self.status_label.setText(f"Looking up original albums on MusicBrainz: {done}/{total}")
+        else:
+            self.status_label.setText(f"Loaded {len(self.tracks_data)} tracks, album lookup complete")
+
+    def _album_item(self, album: str) -> QTableWidgetItem:
+        item = QTableWidgetItem(album)
+        item.setData(Qt.ItemDataRole.UserRole, album)
+        return item
+
+    def _year_item(self, year: str) -> QTableWidgetItem:
+        item = QTableWidgetItem(year)
+        item.setData(Qt.ItemDataRole.UserRole, year)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        return item
 
     def on_error(self, error_message: str):
         """Handle fetch error."""
@@ -636,6 +747,12 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
             title_item.setData(Qt.ItemDataRole.UserRole, track['title'])
             self.table.setItem(row, 2, title_item)
 
+            # Album
+            self.table.setItem(row, 3, self._album_item(track['album']))
+
+            # Year
+            self.table.setItem(row, 4, self._year_item(track['year']))
+
             # YouTube Music Link
             if track['url']:
                 link_item = QTableWidgetItem("🎵 Open")
@@ -647,7 +764,7 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
                 link_item.setData(Qt.ItemDataRole.UserRole, "")
                 link_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self.table.setItem(row, 3, link_item)
+            self.table.setItem(row, 5, link_item)
 
             # Remove Button
             remove_button = QPushButton("🗑️ Remove")
@@ -669,11 +786,11 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
                     background-color: #e53935;
                 }
             """)
-            self.table.setCellWidget(row, 4, remove_button)
+            self.table.setCellWidget(row, 6, remove_button)
 
     def sort_table(self, logical_index: int):
-        """Handle custom sorting for the first three columns."""
-        if logical_index > 2:  # Only sort first three columns (skip Link and Remove)
+        """Handle custom sorting for the data columns."""
+        if logical_index > 4:  # Skip Link and Remove columns
             return
 
         # Toggle sort order if clicking the same column
@@ -700,6 +817,12 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
         elif logical_index == 2:  # Track Name - sort by title but keep original positions
             self.tracks_data.sort(
                 key=lambda x: x['title'].lower(), reverse=reverse)
+        elif logical_index in (3, 4):  # Album / Year - tracks without a value go last
+            field = 'album' if logical_index == 3 else 'year'
+            with_value = [t for t in self.tracks_data if t[field]]
+            without_value = [t for t in self.tracks_data if not t[field]]
+            with_value.sort(key=lambda x: x[field].lower(), reverse=reverse)
+            self.tracks_data[:] = with_value + without_value
 
         # Note: We DO NOT renumber positions here - they stay as original YouTube Music order
         # Repopulate table with sorted data
@@ -707,14 +830,14 @@ class YouTubeMusicPlaylistViewer(QMainWindow):
 
         # Update status
         sort_order_text = "descending" if reverse else "ascending"
-        column_names = ["Position", "Artist", "Track Name"]
+        column_names = ["Position", "Artist", "Track Name", "Album", "Year"]
         self.status_label.setText(
             f"Sorted by {column_names[logical_index]} ({sort_order_text})")
 
     def open_track_url(self, item: QTableWidgetItem):
         """Open the YouTube Music URL for the selected track."""
         row = item.row()
-        url_item = self.table.item(row, 3)
+        url_item = self.table.item(row, 5)
 
         if url_item and url_item.data(Qt.ItemDataRole.UserRole):
             url = url_item.data(Qt.ItemDataRole.UserRole)
